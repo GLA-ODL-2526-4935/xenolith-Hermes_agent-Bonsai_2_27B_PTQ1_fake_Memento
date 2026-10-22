@@ -1,0 +1,15 @@
+{
+  "repository": "https://github.com/sudoingX/llama.cpp",
+  "commit": "ff414120c343e6e6cb868013c99f1dde52b27e70",
+  "status": "source_only_not_compiled_or_benchmarked",
+  "files": {
+    "common/speculative.cpp": {
+      "before_sha256": "53f94ac47bb64e6fb6871ca7d003743acab5dcb5686df2605f3e1cdded846a69",
+      "after_sha256": "c20a6cfa522f49c6a5befdd3cac248a3ab74c1697a76746c452f2d77ecf4b6e6"
+    },
+    "tools/server/server-context.cpp": {
+      "before_sha256": "6076fec9aec5948ec16e3c585fd2d0feb885bd5bfa5fca09eb0c7427e88ac104",
+      "after_sha256": "1713c849b21c14690390dbb7f04370dc9596b7ab79813029dd7ea2eacd3734e9"
+    }
+  }
+}

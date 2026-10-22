@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "id": "bonsai27-intel-cpu",
+  "backend": "prism-llama.cpp",
+  "target_os": "Linux",
+  "device": "none",
+  "context": 8192,
+  "threads": 6,
+  "batch": 256,
+  "ubatch": 128,
+  "kv_type": "q4_0",
+  "reasoning_effort": "low",
+  "max_output_tokens": 4096,
+  "mtp_tokens": 0,
+  "mtp_probability": 0,
+  "batch_invariant": true,
+  "min_available_ram_gib": 5,
+  "host": "127.0.0.1",
+  "port": 18780,
+  "status": "configuration_only_not_target_validated",
+  "runtime_requirement": "PrismML fork prism-b10787-73bfe6c or explicitly pinned compatible newer build; PTQ1 and qwen35 Lean MTP/Hadamard support required. No upstream llama.cpp fallback."
+}

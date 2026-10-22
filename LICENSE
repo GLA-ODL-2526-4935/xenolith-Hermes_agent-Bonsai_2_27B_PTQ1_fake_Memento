@@ -19,3 +19,20 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Scope and upstream notices
+--------------------------
+The MIT grant above applies to original contributions to this combined project,
+including new integration code, local extensions, tests and documentation, to the
+extent owned by the copyright holders. It does not replace or remove licenses or
+copyright notices on inherited code, model weights or third-party dependencies.
+
+Xenolith-derived source retains engine/LICENSE.md (MIT, Copyright (c) 2026
+Simone Iacomino). Hermes-derived source retains Hermes_agent/LICENSE (MIT,
+Copyright (c) 2025 Nous Research). Keep these notices with their respective code.
+New modifications are MIT; the upstream grants/notices remain applicable too.
+
+Bonsai model weights and the community PTQ1 MTP variant are separately licensed
+artifacts (their model cards identify Apache-2.0), not MIT-licensed by this file.
+External inference runtimes and other dependencies retain their corresponding
+licenses. See THIRD_PARTY_NOTICES.md and each component's own license/NOTICE files.

@@ -1,0 +1,107 @@
+--- a/common/speculative.cpp
++++ b/common/speculative.cpp
+@@ -2168,7 +2168,20 @@
+             sparams.no_perf  = false;
+             sparams.top_k    = 10;
+             sparams.samplers = { COMMON_SAMPLER_TYPE_TOP_K };
++            if (this->params.p_min == 0.0f) {
++                // No confidence gate: retain model suppression/logit bias, but avoid
++                // top-k, probability normalization, RNG and candidate sorting.
++                sparams.samplers.clear();
++            }
+             s.reset(common_sampler_init(llama_get_model(ctx_dft), sparams));
++            if (this->params.p_min == 0.0f) {
++                auto * chain = common_sampler_get(s.get());
++                // common_sampler_init appends dist when mirostat/adaptive-p are off.
++                const int last = llama_sampler_chain_n(chain) - 1;
++                GGML_ASSERT(last >= 0);
++                llama_sampler_free(llama_sampler_chain_remove(chain, last));
++                llama_sampler_chain_add(chain, llama_sampler_init_greedy());
++            }
+         }
+ 
+         // offload draft sampling to the backend
+@@ -2176,7 +2189,8 @@
+         if (this->params.backend_sampling) {
+             for (llama_seq_id seq_id = 0; seq_id < (llama_seq_id) n_seq; ++seq_id) {
+                 llama_sampler * chain = llama_sampler_chain_init(llama_sampler_chain_default_params());
+-                llama_sampler_chain_add(chain, llama_sampler_init_top_k(10));
++                llama_sampler_chain_add(chain, this->params.p_min == 0.0f
++                        ? llama_sampler_init_greedy() : llama_sampler_init_top_k(10));
+ 
+                 if (!llama_set_sampler(ctx_dft, seq_id, chain)) {
+                     SPC_WRN("backend offload failed for seq_id=%d; using CPU sampler\n", (int) seq_id);
+@@ -2437,26 +2451,31 @@
+ 
+                 auto * smpl = smpls[seq_id].get();
+ 
+-                common_sampler_sample(smpl, ctx_dft, i_last[seq_id], true);
++                const llama_token sampled = common_sampler_sample(smpl, ctx_dft, i_last[seq_id], true);
+                 const float * h_row = llama_get_embeddings_nextn_ith(ctx_dft, i_last[seq_id]);
+ 
+-                const auto * cur_p = common_sampler_get_candidates(smpl, true);
+-
+-                for (int k = 0; k < std::min(3, (int) cur_p->size); ++k) {
+-                    SPC_DBG(" - seq_id %d, draft candidate %3d, pos %3d: %6d (%8.3f) '%s'\n",
+-                            seq_id, k, i, cur_p->data[k].id, cur_p->data[k].p,
+-                            common_token_to_piece(ctx_dft, cur_p->data[k].id).c_str());
+-                }
+-
+-                // add drafted token for each sequence
+-                const llama_token id = cur_p->data[0].id;
+-
+-                // only collect very high-confidence draft tokens
+-                if (cur_p->data[0].p < params.p_min) {
+-                    drafting[seq_id] = false;
+-                    n_drafting--;
+-
+-                    continue;
++                // Greedy returns the selected token directly; candidate probabilities
++                // are intentionally undefined in this path and must not be consulted.
++                llama_token id = sampled;
++                if (params.p_min != 0.0f) {
++                    const auto * cur_p = common_sampler_get_candidates(smpl, true);
++                    for (int k = 0; k < std::min(3, (int) cur_p->size); ++k) {
++                        SPC_DBG(" - seq_id %d, draft candidate %3d, pos %3d: %6d (%8.3f) '%s'\n",
++                                seq_id, k, i, cur_p->data[k].id, cur_p->data[k].p,
++                                common_token_to_piece(ctx_dft, cur_p->data[k].id).c_str());
++                    }
++
++                    // add drafted token for each sequence
++                    id = cur_p->data[0].id;
++
++                    // only collect very high-confidence draft tokens
++                    if (cur_p->data[0].p < params.p_min) {
++                        drafting[seq_id] = false;
++                        n_drafting--;
++
++                        continue;
++                    }
++
+                 }
+ 
+                 common_sampler_accept(smpl, id, true);
+--- a/tools/server/server-context.cpp
++++ b/tools/server/server-context.cpp
+@@ -3822,7 +3822,12 @@
+ 
+             // verify and try to accept the draft
+             {
+-                common_sampler_ptr smpl_save(common_sampler_clone(slot.smpl.get()));
++                // Only checkpoint/replay needs the pre-verification sampler state.
++                // Bounded recurrent rollback keeps the already-accepted sampler state.
++                const bool may_replay =
++                    ctx_tgt_seq_rm_type == COMMON_CONTEXT_SEQ_RM_TYPE_FULL ||
++                    (ctx_tgt_seq_rm_type == COMMON_CONTEXT_SEQ_RM_TYPE_RS && n_draft > llama_n_rs_seq(ctx_tgt));
++                common_sampler_ptr smpl_save(may_replay ? common_sampler_clone(slot.smpl.get()) : nullptr);
+ 
+                 GGML_ASSERT(slot.spec_i_batch.size() == n_draft + 1);
+                 auto accepted = common_sampler_sample_and_accept_n(slot.smpl.get(), slot.ctx_tgt, slot.spec_i_batch, slot.spec_draft);
+@@ -3860,6 +3865,7 @@
+                         slot.mem.seq_rm(slot.id, ckpt.pos_max + 1, -1);
+ 
+                         slot.prompt.tokens.keep_first(ckpt.n_tokens);
++                        GGML_ASSERT(smpl_save);
+                         common_sampler_copy(smpl_save.get(), slot.smpl.get());
+ 
+                         return;

@@ -1,0 +1,29 @@
+{
+  "repository": "https://github.com/sudoingX/llama.cpp",
+  "commit": "ff414120c343e6e6cb868013c99f1dde52b27e70",
+  "patch_id": "cpu-mtp-v1",
+  "cumulative_includes": "greedy-mtp",
+  "status": "runtime_uncompiled_unbenchmarked",
+  "files": {
+    "common/speculative.cpp": {
+      "before_sha256": "53f94ac47bb64e6fb6871ca7d003743acab5dcb5686df2605f3e1cdded846a69",
+      "after_sha256": "70debaf4485a0799575fccf4898969f8135825ca93f620ee9aac7950ac28ba1a"
+    },
+    "common/common.h": {
+      "before_sha256": "1296275b07e78f54240d0ae94a051c1d38388a9de979ff9f578422c2fade0b5f",
+      "after_sha256": "9e003e76164955fa7322d37ff4182a20c5add70cec59be7c14d86b5e7f93ed76"
+    },
+    "common/arg.cpp": {
+      "before_sha256": "8ad9d71866c3cc82bee06cd646351d26bb8c07e6c93184100d69433994e67b15",
+      "after_sha256": "f1e8d089b864aa72cd33c85f5ab0d1d213d7800b050f067b71ac58e21f8b765a"
+    },
+    "tools/server/server-context.cpp": {
+      "before_sha256": "6076fec9aec5948ec16e3c585fd2d0feb885bd5bfa5fca09eb0c7427e88ac104",
+      "after_sha256": "1713c849b21c14690390dbb7f04370dc9596b7ab79813029dd7ea2eacd3734e9"
+    },
+    "common/mtp-cpu-policy.h": {
+      "before_sha256": null,
+      "after_sha256": "29c02cff3a2a0ce7fdc0d65234b551bb63c2682756f605040140ca289d38fa91"
+    }
+  }
+}

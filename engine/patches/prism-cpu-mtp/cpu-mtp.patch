@@ -1,0 +1,313 @@
+--- a/common/speculative.cpp
++++ b/common/speculative.cpp
+@@ -1,4 +1,5 @@
+ #include "speculative.h"
++#include "mtp-cpu-policy.h"
+ 
+ #include "../src/llama-ext.h"
+ #include "common.h"
+@@ -2132,6 +2133,12 @@
+ 
+     std::vector<int>                i_last;
+     std::vector<std::vector<float>> chain_h;
++    std::vector<bool> drafting;
++    std::vector<int> draft_limit;
++    std::vector<common_mtp_cpu_policy> cpu_policy;
++    std::vector<int64_t> cycle_start_us;
++    std::vector<int> cycle_choice;
++    std::vector<int> cycle_drafted;
+ 
+     common_speculative_impl_draft_mtp(const common_params_speculative & params, uint32_t n_seq)
+         : common_speculative_impl(COMMON_SPECULATIVE_TYPE_DRAFT_MTP, n_seq)
+@@ -2168,7 +2175,20 @@
+             sparams.no_perf  = false;
+             sparams.top_k    = 10;
+             sparams.samplers = { COMMON_SAMPLER_TYPE_TOP_K };
++            if (this->params.p_min == 0.0f) {
++                // No confidence gate: retain model suppression/logit bias, but avoid
++                // top-k, probability normalization, RNG and candidate sorting.
++                sparams.samplers.clear();
++            }
+             s.reset(common_sampler_init(llama_get_model(ctx_dft), sparams));
++            if (this->params.p_min == 0.0f) {
++                auto * chain = common_sampler_get(s.get());
++                // common_sampler_init appends dist when mirostat/adaptive-p are off.
++                const int last = llama_sampler_chain_n(chain) - 1;
++                GGML_ASSERT(last >= 0);
++                llama_sampler_free(llama_sampler_chain_remove(chain, last));
++                llama_sampler_chain_add(chain, llama_sampler_init_greedy());
++            }
+         }
+ 
+         // offload draft sampling to the backend
+@@ -2176,7 +2196,8 @@
+         if (this->params.backend_sampling) {
+             for (llama_seq_id seq_id = 0; seq_id < (llama_seq_id) n_seq; ++seq_id) {
+                 llama_sampler * chain = llama_sampler_chain_init(llama_sampler_chain_default_params());
+-                llama_sampler_chain_add(chain, llama_sampler_init_top_k(10));
++                llama_sampler_chain_add(chain, this->params.p_min == 0.0f
++                        ? llama_sampler_init_greedy() : llama_sampler_init_top_k(10));
+ 
+                 if (!llama_set_sampler(ctx_dft, seq_id, chain)) {
+                     SPC_WRN("backend offload failed for seq_id=%d; using CPU sampler\n", (int) seq_id);
+@@ -2210,6 +2231,16 @@
+ 
+         verify_h.assign(n_seq, {});
+         verify_h_rows.assign(n_seq, 0);
++        drafting.assign(n_seq, false);
++        draft_limit.assign(n_seq, 0);
++        cpu_policy.resize(n_seq);
++        cycle_start_us.assign(n_seq, 0);
++        cycle_choice.assign(n_seq, 0);
++        cycle_drafted.assign(n_seq, 0);
++        for (llama_seq_id seq_id = 0; seq_id < (llama_seq_id) n_seq; ++seq_id) {
++            cpu_policy[seq_id].reset(this->params.n_max);
++            verify_h[seq_id].reserve(((size_t) std::min(n_b, std::max(0, this->params.n_max)) + 1) * n_embd);
++        }
+     }
+ 
+     ~common_speculative_impl_draft_mtp() override {
+@@ -2233,6 +2264,8 @@
+     }
+ 
+     void begin(llama_seq_id seq_id, const llama_tokens & prompt) override {
++        cpu_policy[seq_id].reset(params.n_max);
++        cycle_start_us[seq_id] = 0;
+         const int32_t N = (int32_t) prompt.size();
+         if (N <= 0) {
+             return;
+@@ -2375,7 +2408,7 @@
+ 
+         // keep track of which sequences are still drafting
+         int n_drafting = 0;
+-        std::vector<bool> drafting(n_seq);
++        std::fill(drafting.begin(), drafting.end(), false);
+ 
+         const size_t row_bytes = (size_t) n_embd * sizeof(float);
+ 
+@@ -2386,6 +2419,19 @@
+                 continue;
+             }
+ 
++            int limit = params.n_max;
++            if (params.adaptive && params.n_min <= 1) {
++                limit = std::min(limit, cpu_policy[seq_id].choose());
++            }
++            cycle_choice[seq_id] = limit;
++            if (dp.n_max >= 0) {
++                limit = std::min(limit, dp.n_max);
++            }
++            draft_limit[seq_id] = limit;
++            if (limit <= 0) {
++                continue;
++            }
++            cycle_start_us[seq_id] = params.adaptive ? ggml_time_us() : 0;
+             n_drafting++;
+             drafting[seq_id] = true;
+             common_sampler_reset(smpls[seq_id].get());
+@@ -2437,26 +2483,31 @@
+ 
+                 auto * smpl = smpls[seq_id].get();
+ 
+-                common_sampler_sample(smpl, ctx_dft, i_last[seq_id], true);
++                const llama_token sampled = common_sampler_sample(smpl, ctx_dft, i_last[seq_id], true);
+                 const float * h_row = llama_get_embeddings_nextn_ith(ctx_dft, i_last[seq_id]);
+ 
+-                const auto * cur_p = common_sampler_get_candidates(smpl, true);
+-
+-                for (int k = 0; k < std::min(3, (int) cur_p->size); ++k) {
+-                    SPC_DBG(" - seq_id %d, draft candidate %3d, pos %3d: %6d (%8.3f) '%s'\n",
+-                            seq_id, k, i, cur_p->data[k].id, cur_p->data[k].p,
+-                            common_token_to_piece(ctx_dft, cur_p->data[k].id).c_str());
+-                }
+-
+-                // add drafted token for each sequence
+-                const llama_token id = cur_p->data[0].id;
+-
+-                // only collect very high-confidence draft tokens
+-                if (cur_p->data[0].p < params.p_min) {
+-                    drafting[seq_id] = false;
+-                    n_drafting--;
+-
+-                    continue;
++                // Greedy returns the selected token directly; candidate probabilities
++                // are intentionally undefined in this path and must not be consulted.
++                llama_token id = sampled;
++                if (params.p_min != 0.0f) {
++                    const auto * cur_p = common_sampler_get_candidates(smpl, true);
++                    for (int k = 0; k < std::min(3, (int) cur_p->size); ++k) {
++                        SPC_DBG(" - seq_id %d, draft candidate %3d, pos %3d: %6d (%8.3f) '%s'\n",
++                                seq_id, k, i, cur_p->data[k].id, cur_p->data[k].p,
++                                common_token_to_piece(ctx_dft, cur_p->data[k].id).c_str());
++                    }
++
++                    // add drafted token for each sequence
++                    id = cur_p->data[0].id;
++
++                    // only collect very high-confidence draft tokens
++                    if (cur_p->data[0].p < params.p_min) {
++                        drafting[seq_id] = false;
++                        n_drafting--;
++
++                        continue;
++                    }
++
+                 }
+ 
+                 common_sampler_accept(smpl, id, true);
+@@ -2466,7 +2517,7 @@
+ 
+                 result.push_back(id);
+ 
+-                if (params.n_max <= (int) result.size()) {
++                if (draft_limit[seq_id] <= (int) result.size()) {
+                     drafting[seq_id] = false;
+                     n_drafting--;
+                     continue;
+@@ -2513,17 +2564,24 @@
+                 continue;
+             }
+ 
++            cycle_drafted[seq_id] = (int) dp.result->size();
+             if (dp.result->size() < (size_t) params.n_min) {
+                 dp.result->clear();
+             }
+         }
+     }
+ 
+-    void accept(llama_seq_id seq_id, uint16_t n_accepted, bool /*is_other*/) override {
++    void accept(llama_seq_id seq_id, uint16_t n_accepted, bool is_other) override {
+         if (seq_id < 0 || seq_id >= (llama_seq_id) n_seq) {
+             return;
+         }
+ 
++        if (params.adaptive && !is_other && cycle_start_us[seq_id] > 0) {
++            cpu_policy[seq_id].observe(cycle_choice[seq_id],
++                    cycle_drafted[seq_id], n_accepted,
++                    ggml_time_us() - cycle_start_us[seq_id]);
++        }
++        cycle_start_us[seq_id] = 0;
+         const int32_t n_rows = verify_h_rows[seq_id];
+         if (n_rows <= 0) {
+             return;
+@@ -2531,7 +2589,10 @@
+ 
+         const int32_t i_h = std::min<int32_t>(n_accepted, n_rows - 1);
+         const size_t row_bytes = (size_t) n_embd * sizeof(float);
+-        std::memcpy(pending_h[seq_id].data(), verify_h[seq_id].data() + (size_t) i_h * n_embd, row_bytes);
++        // process() already saved the final row. Full acceptance needs no copy.
++        if (i_h != n_rows - 1) {
++            std::memcpy(pending_h[seq_id].data(), verify_h[seq_id].data() + (size_t) i_h * n_embd, row_bytes);
++        }
+     }
+ };
+ 
+--- a/common/common.h
++++ b/common/common.h
+@@ -329,6 +329,8 @@
+     float p_split = 0.1f; // speculative decoding split probability
+     float p_min   = 0.0f; // minimum speculative decoding probability (greedy)
+ 
++    bool adaptive = false; // opt-in bounded CPU MTP timing policy
++
+     bool backend_sampling = true; // offload draft sampling to the backend (default: on)
+ 
+     common_params_model mparams;
+--- a/common/arg.cpp
++++ b/common/arg.cpp
+@@ -4102,6 +4102,13 @@
+     ).set_spec().set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_SPEC_DRAFT_N_CPU_MOE"));
+ 
+     add_opt(common_arg(
++        {"--spec-draft-adaptive"}, {"--no-spec-draft-adaptive"},
++        "cpu-mtp-v1: adapt MTP windows 1..min(4,n-max) using cycle time per emitted token",
++        [](common_params & params, bool value) {
++            params.speculative.draft.adaptive = value;
++        }
++    ).set_spec().set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}));
++    add_opt(common_arg(
+         {"--spec-draft-n-max"}, "N",
+         string_format("number of tokens to draft for speculative decoding (default: %d)", params.speculative.draft.n_max),
+         [](common_params & params, int value) {
+--- a/tools/server/server-context.cpp
++++ b/tools/server/server-context.cpp
+@@ -3822,7 +3822,12 @@
+ 
+             // verify and try to accept the draft
+             {
+-                common_sampler_ptr smpl_save(common_sampler_clone(slot.smpl.get()));
++                // Only checkpoint/replay needs the pre-verification sampler state.
++                // Bounded recurrent rollback keeps the already-accepted sampler state.
++                const bool may_replay =
++                    ctx_tgt_seq_rm_type == COMMON_CONTEXT_SEQ_RM_TYPE_FULL ||
++                    (ctx_tgt_seq_rm_type == COMMON_CONTEXT_SEQ_RM_TYPE_RS && n_draft > llama_n_rs_seq(ctx_tgt));
++                common_sampler_ptr smpl_save(may_replay ? common_sampler_clone(slot.smpl.get()) : nullptr);
+ 
+                 GGML_ASSERT(slot.spec_i_batch.size() == n_draft + 1);
+                 auto accepted = common_sampler_sample_and_accept_n(slot.smpl.get(), slot.ctx_tgt, slot.spec_i_batch, slot.spec_draft);
+@@ -3860,6 +3865,7 @@
+                         slot.mem.seq_rm(slot.id, ckpt.pos_max + 1, -1);
+ 
+                         slot.prompt.tokens.keep_first(ckpt.n_tokens);
++                        GGML_ASSERT(smpl_save);
+                         common_sampler_copy(smpl_save.get(), slot.smpl.get());
+ 
+                         return;
+--- /dev/null
++++ b/common/mtp-cpu-policy.h
+@@ -0,0 +1,55 @@
++#pragma once
++
++#include <algorithm>
++#include <array>
++#include <cstdint>
++#include <limits>
++
++// One sequence, one request. Bounded exploration, measured microseconds per
++// emitted token (accepted drafts + the target token), not acceptance ratio.
++struct common_mtp_cpu_policy {
++    int cap = 1;
++    uint64_t cycles = 0;
++    std::array<int, 5> samples{};
++    std::array<double, 5> cost{};
++
++    void reset(int maximum) {
++        cap = std::max(1, std::min(4, maximum));
++        cycles = 0;
++        samples.fill(0);
++        cost.fill(0.0);
++    }
++
++    int choose() const {
++        for (int n = 1; n <= cap; ++n) {
++            if (samples[n] < 4) {
++                return n;
++            }
++        }
++        // Periodically revisit alternatives when the workload changes.
++        if (cycles % 32 == 0) {
++            return 1 + (int) ((cycles / 32) % cap);
++        }
++        int best = 1;
++        for (int n = 2; n <= cap; ++n) {
++            if (cost[n] < cost[best]) {
++                best = n;
++            }
++        }
++        return best;
++    }
++
++    void observe(int window, int drafted, int accepted, int64_t elapsed_us) {
++        // Context/output caps and confidence truncation are not full samples.
++        if (window < 1 || window > cap || drafted != window || accepted < 0 ||
++                accepted > drafted || elapsed_us <= 0) {
++            return;
++        }
++        const double value = (double) elapsed_us / (accepted + 1);
++        cost[window] = samples[window] ? 0.75 * cost[window] + 0.25 * value : value;
++        if (samples[window] < std::numeric_limits<int>::max()) {
++            ++samples[window];
++        }
++        ++cycles;
++    }
++};
