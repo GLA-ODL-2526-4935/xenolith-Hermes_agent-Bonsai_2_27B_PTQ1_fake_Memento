@@ -1,0 +1,16 @@
+.git
+**/.env*
+**/.hermes
+**/.venv*
+**/__pycache__
+**/*.pyc
+**/*.gguf
+**/*.safetensors
+**/*.pt
+**/*.pem
+**/*.key
+**/memory.json
+**/config.yaml
+work
+outputs
+node_modules
