@@ -149,3 +149,17 @@ Upstream code retains its original licenses/copyright notices: Xenolith and
 Hermes are MIT; Bonsai model weights are Apache-2.0, **not relicensed as MIT**.
 Runtime, dependencies and optional model licenses remain separate. See
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) before redistributing a bundle.
+
+
+## Intel decode research plan — 22 October 2026
+
+See the [engine structure roadmap](engine/docs/ENGINE_DECODE_STRUCTURE_ROADMAP.md),
+[engine checklist section 4A](PROJECT_FUNCTION_CHECKLIST.md#4a-bonsai-prism-paper-derived-decode-structures)
+and [twelve paper references with attribution](engine/README.md#decode-research-roadmap-and-paper-references).
+Priority is BITCOS feasibility, bitnet.cpp exact lookup and Sandwich phase scheduling;
+these are design gates, not measured speed gains or newly activated runtime code.
+
+
+The three priority papers now have an [inactive source package](engine/patches/prism-intel-decode/README.md)
+and implementation status in checklist 4B. BITCOS remains a conditional codec/kernel
+experiment; full target runtime/parity/performance validation is pending for all paths.

@@ -179,3 +179,7 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# Local project planning documents (all directories; keep local, do not publish).
+Local_*_Plan_v*.md
+PROJECT_FUNCTION_CHECKLIST.md

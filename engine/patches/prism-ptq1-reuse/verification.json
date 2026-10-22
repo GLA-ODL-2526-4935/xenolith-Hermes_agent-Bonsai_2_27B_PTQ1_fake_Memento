@@ -1,0 +1,20 @@
+{
+  "patch_id": "ptq1-reuse-v2",
+  "patch_apply_hash_reverse": true,
+  "installer_python_syntax": true,
+  "actual_x86_dispatch_and_matmul_chunk_compiled": true,
+  "compile_variants": [
+    "AVX2 batch on",
+    "AVX2 batch off",
+    "AVX2 disabled",
+    "SSE2"
+  ],
+  "cpp_parity_and_benchmark_objects_compiled": true,
+  "native_code_executed": false,
+  "full_runtime_built": false,
+  "numerical_parity_verified": false,
+  "model_loaded": false,
+  "performance_measured": false,
+  "dram_bytes_measured": false,
+  "fixture": "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\ptq1-reuse-check-ydu8r44h"
+}

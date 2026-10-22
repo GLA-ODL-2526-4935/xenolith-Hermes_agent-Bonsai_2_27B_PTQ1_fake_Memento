@@ -1,0 +1,18 @@
+{
+  "repository": "https://github.com/sudoingX/llama.cpp",
+  "commit": "ff414120c343e6e6cb868013c99f1dde52b27e70",
+  "patch_id": "ptq1-avx2-v1",
+  "status": "source_only_not_executed_not_benchmarked",
+  "patch_sha256": "dd06c98eefd5fa76a80fe84d99ae2c4c406a81a852575ef7718d4a36114c94fa",
+  "composition": "independent of cpu-mtp-v1; disjoint files; either order on pinned source",
+  "files": {
+    "ggml/src/ggml-cpu/arch/x86/quants.c": {
+      "before_sha256": "01197de2c904c430502c737b0c6084f20bda3e9b7d5063b10c2cbed75b60e041",
+      "after_sha256": "36b39e85dc39a13c474ba3b75d3aa6577ca6caed45154bf6c4bda2c0f570f2c5"
+    },
+    "ggml/src/ggml-cpu/arch/x86/ptq1-avx2.h": {
+      "before_sha256": null,
+      "after_sha256": "9757c0320ee17a1546948f5919bb158142d94c74ce40768bf70f198978b79873"
+    }
+  }
+}

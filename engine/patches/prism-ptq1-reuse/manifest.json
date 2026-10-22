@@ -1,0 +1,30 @@
+{
+  "repository": "https://github.com/sudoingX/llama.cpp",
+  "commit": "ff414120c343e6e6cb868013c99f1dde52b27e70",
+  "patch_id": "ptq1-reuse-v2",
+  "status": "source_only_batch_opt_in_not_executed_not_benchmarked",
+  "patch_sha256": "ebda087d3899b0bd463e1022fe8641a45cb424cf682d862cd3f1eeb1ac3ae86d",
+  "composition": "replaces ptq1-avx2-v1; disjoint from cpu-mtp-v1; apply only on pinned input",
+  "files": {
+    "ggml/src/ggml-cpu/arch/x86/quants.c": {
+      "before_sha256": "01197de2c904c430502c737b0c6084f20bda3e9b7d5063b10c2cbed75b60e041",
+      "after_sha256": "d329d5bd37e9188182f877736cc6a93c1e51508928a28c9e9069839374d2891f"
+    },
+    "ggml/src/ggml-cpu/ggml-cpu.c": {
+      "before_sha256": "19b5bd6f4a2e360312c9d3e2aa4204115712b7a5f54d4b990554fbd1cc18cded",
+      "after_sha256": "b8867a31e18aae927a8b46b14907bf05d74dd56849f3fafc320e0831b62ab355"
+    },
+    "ggml/src/ggml-cpu/quants.h": {
+      "before_sha256": "acb785971dc4e71889bf498ee8461aaf33b8d72ddc517331014e7df7119e4c69",
+      "after_sha256": "ab74e2a467798eae59a42742aa7f291e3cca1cf05342efd95561dbd2bc967838"
+    },
+    "ggml/src/ggml-cpu/arch/x86/ptq1-avx2.h": {
+      "before_sha256": null,
+      "after_sha256": "9757c0320ee17a1546948f5919bb158142d94c74ce40768bf70f198978b79873"
+    },
+    "ggml/src/ggml-cpu/arch/x86/ptq1-reuse.h": {
+      "before_sha256": null,
+      "after_sha256": "808bd218cafcbef7e59a1d92ebd1f794d8618c840276b66ade2d125b1083c0fa"
+    }
+  }
+}

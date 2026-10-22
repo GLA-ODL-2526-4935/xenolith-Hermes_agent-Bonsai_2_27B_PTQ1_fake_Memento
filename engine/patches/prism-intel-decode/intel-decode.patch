@@ -1,0 +1,823 @@
+--- a/common/arg.cpp
++++ b/common/arg.cpp
+@@ -4102,6 +4102,13 @@
+     ).set_spec().set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}).set_env("LLAMA_ARG_SPEC_DRAFT_N_CPU_MOE"));
+ 
+     add_opt(common_arg(
++        {"--spec-draft-adaptive"}, {"--no-spec-draft-adaptive"},
++        "cpu-mtp-v1: adapt MTP windows 1..min(4,n-max) using cycle time per emitted token",
++        [](common_params & params, bool value) {
++            params.speculative.draft.adaptive = value;
++        }
++    ).set_spec().set_examples({LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}));
++    add_opt(common_arg(
+         {"--spec-draft-n-max"}, "N",
+         string_format("number of tokens to draft for speculative decoding (default: %d)", params.speculative.draft.n_max),
+         [](common_params & params, int value) {
+--- a/common/common.cpp
++++ b/common/common.cpp
+@@ -1794,6 +1794,7 @@
+     }
+     free_fn(threadpool);
+     free_fn(threadpool_batch);
++    if (threadpool_verify) free_fn(threadpool_verify);
+ }
+ 
+ void common_threadpools::init(llama_context * ctx, const common_params & params) {
+@@ -2373,3 +2374,5 @@
+     data_dft.clear();
+     data_spec.clear();
+ }
++
++#include "sandwich-impl.inc"
+--- a/common/common.h
++++ b/common/common.h
+@@ -3,6 +3,7 @@
+ #pragma once
+ 
+ #include "llama-cpp.h"
++#include "sandwich-policy.h"
+ 
+ #include "ggml-opt.h"
+ #include "ggml.h"
+@@ -329,6 +330,8 @@
+     float p_split = 0.1f; // speculative decoding split probability
+     float p_min   = 0.0f; // minimum speculative decoding probability (greedy)
+ 
++    bool adaptive = false; // opt-in bounded CPU MTP timing policy
++
+     bool backend_sampling = true; // offload draft sampling to the backend (default: on)
+ 
+     common_params_model mparams;
+@@ -920,6 +923,8 @@
+ 
+     llama_model * model();
+     llama_context * context();
++    void select_cpu_phase(common_cpu_phase phase);
++    void init_cpu_phases(const common_params & params);
+ 
+     common_sampler * sampler(llama_seq_id seq_id);
+     void reset_samplers();
+@@ -961,11 +966,17 @@
+     common_threadpools & operator=(const common_threadpools &) = delete;
+ 
+     void init(llama_context * ctx, const common_params & params);
++    void init_sandwich(llama_context * ctx, const common_params & params);
++    void select_phase(llama_context * ctx, common_cpu_phase phase);
+ 
+ private:
+     ggml_threadpool * threadpool       = nullptr;
+     ggml_threadpool * threadpool_batch = nullptr;
+ 
++    ggml_threadpool * threadpool_verify = nullptr;
++    int sandwich_counts[3] = {0,0,0};
++    common_cpu_phase sandwich_phase = common_cpu_phase::original;
++    decltype(ggml_threadpool_pause) * pause_fn = nullptr;
+     decltype(ggml_threadpool_free) * free_fn = nullptr;
+ };
+ 
+--- /dev/null
++++ b/common/mtp-cpu-policy.h
+@@ -0,0 +1,55 @@
++#pragma once
++
++#include <algorithm>
++#include <array>
++#include <cstdint>
++#include <limits>
++
++// One sequence, one request. Bounded exploration, measured microseconds per
++// emitted token (accepted drafts + the target token), not acceptance ratio.
++struct common_mtp_cpu_policy {
++    int cap = 1;
++    uint64_t cycles = 0;
++    std::array<int, 5> samples{};
++    std::array<double, 5> cost{};
++
++    void reset(int maximum) {
++        cap = std::max(1, std::min(4, maximum));
++        cycles = 0;
++        samples.fill(0);
++        cost.fill(0.0);
++    }
++
++    int choose() const {
++        for (int n = 1; n <= cap; ++n) {
++            if (samples[n] < 4) {
++                return n;
++            }
++        }
++        // Periodically revisit alternatives when the workload changes.
++        if (cycles % 32 == 0) {
++            return 1 + (int) ((cycles / 32) % cap);
++        }
++        int best = 1;
++        for (int n = 2; n <= cap; ++n) {
++            if (cost[n] < cost[best]) {
++                best = n;
++            }
++        }
++        return best;
++    }
++
++    void observe(int window, int drafted, int accepted, int64_t elapsed_us) {
++        // Context/output caps and confidence truncation are not full samples.
++        if (window < 1 || window > cap || drafted != window || accepted < 0 ||
++                accepted > drafted || elapsed_us <= 0) {
++            return;
++        }
++        const double value = (double) elapsed_us / (accepted + 1);
++        cost[window] = samples[window] ? 0.75 * cost[window] + 0.25 * value : value;
++        if (samples[window] < std::numeric_limits<int>::max()) {
++            ++samples[window];
++        }
++        ++cycles;
++    }
++};
+--- a/common/speculative.cpp
++++ b/common/speculative.cpp
+@@ -1,4 +1,5 @@
+ #include "speculative.h"
++#include "mtp-cpu-policy.h"
+ 
+ #include "../src/llama-ext.h"
+ #include "common.h"
+@@ -2132,6 +2133,12 @@
+ 
+     std::vector<int>                i_last;
+     std::vector<std::vector<float>> chain_h;
++    std::vector<bool> drafting;
++    std::vector<int> draft_limit;
++    std::vector<common_mtp_cpu_policy> cpu_policy;
++    std::vector<int64_t> cycle_start_us;
++    std::vector<int> cycle_choice;
++    std::vector<int> cycle_drafted;
+ 
+     common_speculative_impl_draft_mtp(const common_params_speculative & params, uint32_t n_seq)
+         : common_speculative_impl(COMMON_SPECULATIVE_TYPE_DRAFT_MTP, n_seq)
+@@ -2168,7 +2175,20 @@
+             sparams.no_perf  = false;
+             sparams.top_k    = 10;
+             sparams.samplers = { COMMON_SAMPLER_TYPE_TOP_K };
++            if (this->params.p_min == 0.0f) {
++                // No confidence gate: retain model suppression/logit bias, but avoid
++                // top-k, probability normalization, RNG and candidate sorting.
++                sparams.samplers.clear();
++            }
+             s.reset(common_sampler_init(llama_get_model(ctx_dft), sparams));
++            if (this->params.p_min == 0.0f) {
++                auto * chain = common_sampler_get(s.get());
++                // common_sampler_init appends dist when mirostat/adaptive-p are off.
++                const int last = llama_sampler_chain_n(chain) - 1;
++                GGML_ASSERT(last >= 0);
++                llama_sampler_free(llama_sampler_chain_remove(chain, last));
++                llama_sampler_chain_add(chain, llama_sampler_init_greedy());
++            }
+         }
+ 
+         // offload draft sampling to the backend
+@@ -2176,7 +2196,8 @@
+         if (this->params.backend_sampling) {
+             for (llama_seq_id seq_id = 0; seq_id < (llama_seq_id) n_seq; ++seq_id) {
+                 llama_sampler * chain = llama_sampler_chain_init(llama_sampler_chain_default_params());
+-                llama_sampler_chain_add(chain, llama_sampler_init_top_k(10));
++                llama_sampler_chain_add(chain, this->params.p_min == 0.0f
++                        ? llama_sampler_init_greedy() : llama_sampler_init_top_k(10));
+ 
+                 if (!llama_set_sampler(ctx_dft, seq_id, chain)) {
+                     SPC_WRN("backend offload failed for seq_id=%d; using CPU sampler\n", (int) seq_id);
+@@ -2210,6 +2231,16 @@
+ 
+         verify_h.assign(n_seq, {});
+         verify_h_rows.assign(n_seq, 0);
++        drafting.assign(n_seq, false);
++        draft_limit.assign(n_seq, 0);
++        cpu_policy.resize(n_seq);
++        cycle_start_us.assign(n_seq, 0);
++        cycle_choice.assign(n_seq, 0);
++        cycle_drafted.assign(n_seq, 0);
++        for (llama_seq_id seq_id = 0; seq_id < (llama_seq_id) n_seq; ++seq_id) {
++            cpu_policy[seq_id].reset(this->params.n_max);
++            verify_h[seq_id].reserve(((size_t) std::min(n_b, std::max(0, this->params.n_max)) + 1) * n_embd);
++        }
+     }
+ 
+     ~common_speculative_impl_draft_mtp() override {
+@@ -2233,6 +2264,8 @@
+     }
+ 
+     void begin(llama_seq_id seq_id, const llama_tokens & prompt) override {
++        cpu_policy[seq_id].reset(params.n_max);
++        cycle_start_us[seq_id] = 0;
+         const int32_t N = (int32_t) prompt.size();
+         if (N <= 0) {
+             return;
+@@ -2375,7 +2408,7 @@
+ 
+         // keep track of which sequences are still drafting
+         int n_drafting = 0;
+-        std::vector<bool> drafting(n_seq);
++        std::fill(drafting.begin(), drafting.end(), false);
+ 
+         const size_t row_bytes = (size_t) n_embd * sizeof(float);
+ 
+@@ -2386,6 +2419,19 @@
+                 continue;
+             }
+ 
++            int limit = params.n_max;
++            if (params.adaptive && params.n_min <= 1) {
++                limit = std::min(limit, cpu_policy[seq_id].choose());
++            }
++            cycle_choice[seq_id] = limit;
++            if (dp.n_max >= 0) {
++                limit = std::min(limit, dp.n_max);
++            }
++            draft_limit[seq_id] = limit;
++            if (limit <= 0) {
++                continue;
++            }
++            cycle_start_us[seq_id] = params.adaptive ? ggml_time_us() : 0;
+             n_drafting++;
+             drafting[seq_id] = true;
+             common_sampler_reset(smpls[seq_id].get());
+@@ -2437,26 +2483,31 @@
+ 
+                 auto * smpl = smpls[seq_id].get();
+ 
+-                common_sampler_sample(smpl, ctx_dft, i_last[seq_id], true);
++                const llama_token sampled = common_sampler_sample(smpl, ctx_dft, i_last[seq_id], true);
+                 const float * h_row = llama_get_embeddings_nextn_ith(ctx_dft, i_last[seq_id]);
+ 
+-                const auto * cur_p = common_sampler_get_candidates(smpl, true);
+-
+-                for (int k = 0; k < std::min(3, (int) cur_p->size); ++k) {
+-                    SPC_DBG(" - seq_id %d, draft candidate %3d, pos %3d: %6d (%8.3f) '%s'\n",
+-                            seq_id, k, i, cur_p->data[k].id, cur_p->data[k].p,
+-                            common_token_to_piece(ctx_dft, cur_p->data[k].id).c_str());
+-                }
+-
+-                // add drafted token for each sequence
+-                const llama_token id = cur_p->data[0].id;
+-
+-                // only collect very high-confidence draft tokens
+-                if (cur_p->data[0].p < params.p_min) {
+-                    drafting[seq_id] = false;
+-                    n_drafting--;
+-
+-                    continue;
++                // Greedy returns the selected token directly; candidate probabilities
++                // are intentionally undefined in this path and must not be consulted.
++                llama_token id = sampled;
++                if (params.p_min != 0.0f) {
++                    const auto * cur_p = common_sampler_get_candidates(smpl, true);
++                    for (int k = 0; k < std::min(3, (int) cur_p->size); ++k) {
++                        SPC_DBG(" - seq_id %d, draft candidate %3d, pos %3d: %6d (%8.3f) '%s'\n",
++                                seq_id, k, i, cur_p->data[k].id, cur_p->data[k].p,
++                                common_token_to_piece(ctx_dft, cur_p->data[k].id).c_str());
++                    }
++
++                    // add drafted token for each sequence
++                    id = cur_p->data[0].id;
++
++                    // only collect very high-confidence draft tokens
++                    if (cur_p->data[0].p < params.p_min) {
++                        drafting[seq_id] = false;
++                        n_drafting--;
++
++                        continue;
++                    }
++
+                 }
+ 
+                 common_sampler_accept(smpl, id, true);
+@@ -2466,7 +2517,7 @@
+ 
+                 result.push_back(id);
+ 
+-                if (params.n_max <= (int) result.size()) {
++                if (draft_limit[seq_id] <= (int) result.size()) {
+                     drafting[seq_id] = false;
+                     n_drafting--;
+                     continue;
+@@ -2513,17 +2564,24 @@
+                 continue;
+             }
+ 
++            cycle_drafted[seq_id] = (int) dp.result->size();
+             if (dp.result->size() < (size_t) params.n_min) {
+                 dp.result->clear();
+             }
+         }
+     }
+ 
+-    void accept(llama_seq_id seq_id, uint16_t n_accepted, bool /*is_other*/) override {
++    void accept(llama_seq_id seq_id, uint16_t n_accepted, bool is_other) override {
+         if (seq_id < 0 || seq_id >= (llama_seq_id) n_seq) {
+             return;
+         }
+ 
++        if (params.adaptive && !is_other && cycle_start_us[seq_id] > 0) {
++            cpu_policy[seq_id].observe(cycle_choice[seq_id],
++                    cycle_drafted[seq_id], n_accepted,
++                    ggml_time_us() - cycle_start_us[seq_id]);
++        }
++        cycle_start_us[seq_id] = 0;
+         const int32_t n_rows = verify_h_rows[seq_id];
+         if (n_rows <= 0) {
+             return;
+@@ -2531,7 +2589,10 @@
+ 
+         const int32_t i_h = std::min<int32_t>(n_accepted, n_rows - 1);
+         const size_t row_bytes = (size_t) n_embd * sizeof(float);
+-        std::memcpy(pending_h[seq_id].data(), verify_h[seq_id].data() + (size_t) i_h * n_embd, row_bytes);
++        // process() already saved the final row. Full acceptance needs no copy.
++        if (i_h != n_rows - 1) {
++            std::memcpy(pending_h[seq_id].data(), verify_h[seq_id].data() + (size_t) i_h * n_embd, row_bytes);
++        }
+     }
+ };
+ 
+--- a/ggml/src/ggml-cpu/ggml-cpu.c
++++ b/ggml/src/ggml-cpu/ggml-cpu.c
+@@ -1246,6 +1246,48 @@
+ 
+     const size_t src1_col_stride = src1_cont || src1->type != vec_dot_type ? row_size : nb11;
+ 
++    // Exact byte-plane pair LUT: table build is amortized across up to 16 rows.
++    // Opt-in, ordinary 2-D skinny matrices only; all other shapes keep fallback.
++#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2) && defined(GGML_PTQ1_ENABLE_PAIR_LUT)
++    const int64_t pair_columns = ir1_end-ir1_start;
++    if (!params->use_ref && src0->type == GGML_TYPE_PTQ1_0 &&
++        vec_dot_type == GGML_TYPE_Q8_0 && num_rows_per_vec_dot == 1 &&
++        ne02 == 1 && ne03 == 1 && ne12 == 1 && ne13 == 1 &&
++        ne00 >= 0 && ne00 <= INT_MAX && ne00 % 128 == 0 &&
++        nb00 == ggml_type_size(GGML_TYPE_PTQ1_0) &&
++        ne11 >= 1 && ne11 <= 5 && pair_columns >= 1 && pair_columns <= 5 &&
++        ir1_start >= 0 && ir1_end <= ne11 && nb0 == sizeof(float)) {
++        for (int64_t r=ir0_start;r<ir0_end;r+=16) {
++            ggml_ptq1_pair_lut_tile((int)ne00,
++                (float *)((char *)dst->data+ir1_start*nb1)+r,nb1,
++                (const char *)src0->data+r*nb01,nb01,
++                (const char *)wdata+ir1_start*src1_col_stride,src1_col_stride,
++                (int)MIN(16,ir0_end-r),(int)pair_columns);
++        }
++        return;
++    }
++#endif
++
++    // Opt-in tiny-batch verification: share packed-weight unpack across columns.
++    // Higher dimensions/broadcasts and reference requests keep the original path.
++#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2) && defined(GGML_PTQ1_ENABLE_BATCH)
++    const int64_t ptq1_columns = ir1_end - ir1_start;
++    if (!params->use_ref && src0->type == GGML_TYPE_PTQ1_0 &&
++        vec_dot_type == GGML_TYPE_Q8_0 && num_rows_per_vec_dot == 1 &&
++        ne02 == 1 && ne03 == 1 && ne12 == 1 && ne13 == 1 &&
++        ne11 >= 2 && ne11 <= 5 && ptq1_columns >= 2 && ptq1_columns <= 5 &&
++        ir1_start >= 0 && ir1_end <= ne11 && nb0 == sizeof(float)) {
++        const char * ptq1_y = (const char *) wdata + ir1_start * src1_col_stride;
++        float * ptq1_dst = (float *) ((char *) dst->data + ir1_start * nb1);
++        for (int64_t ir0 = ir0_start; ir0 < ir0_end; ++ir0) {
++            ggml_vec_dot_ptq1_0_q8_0_batch(ne00, ptq1_dst + ir0, nb1,
++                (const char *) src0->data + ir0 * nb01, ptq1_y,
++                src1_col_stride, (int) ptq1_columns);
++        }
++        return;
++    }
++#endif
++
+     // attempt to reduce false-sharing (does not seem to make a difference)
+     // 16 * 2, accounting for mmla kernels
+     float tmp[32];
+--- a/ggml/src/ggml-cpu/quants.h
++++ b/ggml/src/ggml-cpu/quants.h
+@@ -45,6 +45,11 @@
+ void ggml_vec_dot_pq2_0_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc);
+ void ggml_vec_dot_pq2_0_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc);
+ void ggml_vec_dot_ptq1_0_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc);
++
++#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2) && defined(GGML_PTQ1_ENABLE_BATCH)
++void ggml_vec_dot_ptq1_0_q8_0_batch(int n, float * GGML_RESTRICT result, size_t result_stride,
++    const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, size_t column_stride, int columns);
++#endif
+ void ggml_vec_dot_q4_0_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc);
+ void ggml_vec_dot_q4_1_q8_1(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc);
+ void ggml_vec_dot_q5_0_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc);
+@@ -112,3 +117,10 @@
+ #ifdef __cplusplus
+ }
+ #endif
++
++
++#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2) && defined(GGML_PTQ1_ENABLE_PAIR_LUT)
++void ggml_ptq1_pair_lut_tile(int n, float * result, size_t output_col_stride,
++    const void * vx, size_t weight_row_stride, const void * vy,
++    size_t activation_col_stride, int rows, int columns);
++#endif
+--- /dev/null
++++ b/ggml/src/ggml-cpu/arch/x86/ptq1-avx2.h
+@@ -0,0 +1,66 @@
++// PTQ1 AVX2 source candidate. Upstream llama.cpp MIT license applies.
++// Included after the existing SSE helpers in arch/x86/quants.c.
++#ifndef GGML_PTQ1_AVX2_H
++#define GGML_PTQ1_AVX2_H
++#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2)
++static inline __m256i ptq1_decode_trits_avx2(__m256i * state) {
++    const __m256i biased = _mm256_xor_si256(*state, _mm256_set1_epi8(-128));
++    const __m256i ge1 = _mm256_cmpgt_epi8(biased, _mm256_set1_epi8(85 - 128));
++    const __m256i ge2 = _mm256_cmpgt_epi8(biased, _mm256_set1_epi8(170 - 128));
++    *state = _mm256_add_epi8(*state, _mm256_add_epi8(*state, *state));
++    return _mm256_sub_epi8(_mm256_setzero_si256(), _mm256_add_epi8(ge1, ge2));
++}
++
++static inline __m256i ptq1_dot_codes_avx2(__m256i codes, __m256i activation) {
++    // Unsigned 0..2 codes avoid the int8 -128 negation trap. The intermediate
++    // pair sums are bounded by 512 in magnitude, so maddubs does not saturate.
++    const __m256i ones8 = _mm256_set1_epi8(1);
++    const __m256i dot = _mm256_maddubs_epi16(codes, activation);
++    const __m256i offset = _mm256_maddubs_epi16(ones8, activation);
++    return _mm256_madd_epi16(_mm256_sub_epi16(dot, offset), _mm256_set1_epi16(1));
++}
++
++static void ggml_vec_dot_ptq1_0_q8_0_avx2(
++        int n, float * GGML_RESTRICT result,
++        const block_ptq1_0 * GGML_RESTRICT x,
++        const block_q8_0 * GGML_RESTRICT y) {
++    assert(n % QK_PTQ1_0 == 0);
++    const __m128i zero = _mm_setzero_si128();
++    float sumf = 0.0f;
++    for (int i = 0; i < n / QK_PTQ1_0; ++i) {
++        const block_q8_0 * yb = &y[i * 4];
++        __m128i sums[4] = {zero, zero, zero, zero};
++        // Bounded 16 + 8 byte loads, never a 32-byte read of a 24-byte payload.
++        // Low lane: weights 0..79. High lane: weights 80..119, eight at a time.
++        __m256i packed = _mm256_castsi128_si256(_mm_loadu_si128((const __m128i *) x[i].qs));
++        packed = _mm256_inserti128_si256(packed, _mm_loadl_epi64((const __m128i *) &x[i].qs[16]), 1);
++        for (int j = 0; j < 5; ++j) {
++            const int offset = 80 + j * 8;
++            const __m128i main_y = _mm_loadu_si128((const __m128i *) &yb[j / 2].qs[(j % 2) * 16]);
++            const __m128i tail_y = _mm_loadl_epi64((const __m128i *) &yb[offset / 32].qs[offset % 32]);
++            __m256i qy = _mm256_castsi128_si256(main_y);
++            qy = _mm256_inserti128_si256(qy, tail_y, 1);
++            const __m256i dot = ptq1_dot_codes_avx2(ptq1_decode_trits_avx2(&packed), qy);
++            sums[j / 2] = _mm_add_epi32(sums[j / 2], _mm256_castsi256_si128(dot));
++            sums[offset / 32] = _mm_add_epi32(sums[offset / 32], _mm256_extracti128_si256(dot, 1));
++        }
++        // Eight final trits retain upstream element ordering and bounded loads.
++        uint16_t qh;
++        memcpy(&qh, x[i].qh, sizeof(qh));
++        __m128i tail = _mm_unpacklo_epi8(_mm_set1_epi16((int16_t) qh), zero);
++        tail = _mm_and_si128(_mm_mullo_epi16(tail, _mm_setr_epi16(1, 1, 3, 3, 9, 9, 27, 27)), _mm_set1_epi16(255));
++        const __m128i q = decode_trits_sse2(&tail);
++        const __m128i qy = _mm_loadl_epi64((const __m128i *) &yb[3].qs[24]);
++        const __m128i sy = _mm_cmpgt_epi8(zero, qy);
++        sums[3] = _mm_add_epi32(sums[3], _mm_madd_epi16(q, _mm_unpacklo_epi8(qy, sy)));
++        // Preserve upstream floating accumulation order and four Q8 scales.
++        float sumi = 0.0f;
++        for (int k = 0; k < 4; ++k) {
++            sumi += GGML_CPU_FP16_TO_FP32(yb[k].d) * hsum_i32_4_sse2(sums[k]);
++        }
++        sumf += GGML_CPU_FP16_TO_FP32(x[i].d) * sumi;
++    }
++    *result = sumf;
++}
++#endif
++#endif
+--- /dev/null
++++ b/ggml/src/ggml-cpu/arch/x86/ptq1-reuse.h
+@@ -0,0 +1,56 @@
++// Source-only PTQ1 tiny-batch candidate; llama.cpp MIT license applies.
++// Included after ptq1-avx2.h in arch/x86/quants.c.
++#ifndef GGML_PTQ1_REUSE_H
++#define GGML_PTQ1_REUSE_H
++#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2) && defined(GGML_PTQ1_ENABLE_BATCH)
++void ggml_vec_dot_ptq1_0_q8_0_batch(
++        int n, float * GGML_RESTRICT result, size_t result_stride,
++        const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy,
++        size_t column_stride, int columns) {
++    assert(n >= 0 && n % QK_PTQ1_0 == 0);
++    assert(columns >= 2 && columns <= 5);
++    const block_ptq1_0 * x = (const block_ptq1_0 *) vx;
++    const __m128i zero = _mm_setzero_si128();
++    float totals[5] = {0, 0, 0, 0, 0};
++    for (int i = 0; i < n / QK_PTQ1_0; ++i) {
++        // Keep one decoded block in registers/stack, not an expanded weight row.
++        // Decode and read the packed payload once for all verification columns.
++        __m256i codes[5];
++        __m256i packed = _mm256_castsi128_si256(_mm_loadu_si128((const __m128i *) x[i].qs));
++        packed = _mm256_inserti128_si256(packed, _mm_loadl_epi64((const __m128i *) &x[i].qs[16]), 1);
++        for (int j = 0; j < 5; ++j) {
++            codes[j] = ptq1_decode_trits_avx2(&packed);
++        }
++        uint16_t qh;
++        memcpy(&qh, x[i].qh, sizeof(qh));
++        __m128i tail = _mm_unpacklo_epi8(_mm_set1_epi16((int16_t) qh), zero);
++        tail = _mm_and_si128(_mm_mullo_epi16(tail, _mm_setr_epi16(1, 1, 3, 3, 9, 9, 27, 27)), _mm_set1_epi16(255));
++        const __m128i last_codes = decode_trits_sse2(&tail);
++        const float scale = GGML_CPU_FP16_TO_FP32(x[i].d);
++        for (int c = 0; c < columns; ++c) {
++            const block_q8_0 * yb = (const block_q8_0 *) ((const char *) vy + c * column_stride) + i * 4;
++            __m128i sums[4] = {zero, zero, zero, zero};
++            for (int j = 0; j < 5; ++j) {
++                const int offset = 80 + j * 8;
++                __m256i qy = _mm256_castsi128_si256(_mm_loadu_si128((const __m128i *) &yb[j / 2].qs[(j % 2) * 16]));
++                qy = _mm256_inserti128_si256(qy, _mm_loadl_epi64((const __m128i *) &yb[offset / 32].qs[offset % 32]), 1);
++                const __m256i dot = ptq1_dot_codes_avx2(codes[j], qy);
++                sums[j / 2] = _mm_add_epi32(sums[j / 2], _mm256_castsi256_si128(dot));
++                sums[offset / 32] = _mm_add_epi32(sums[offset / 32], _mm256_extracti128_si256(dot, 1));
++            }
++            const __m128i qy = _mm_loadl_epi64((const __m128i *) &yb[3].qs[24]);
++            sums[3] = _mm_add_epi32(sums[3], _mm_madd_epi16(last_codes, _mm_unpacklo_epi8(qy, _mm_cmpgt_epi8(zero, qy))));
++            // Keep the single-column scale and accumulation order unchanged.
++            float sumi = 0.0f;
++            for (int k = 0; k < 4; ++k) {
++                sumi += GGML_CPU_FP16_TO_FP32(yb[k].d) * hsum_i32_4_sse2(sums[k]);
++            }
++            totals[c] += scale * sumi;
++        }
++    }
++    for (int c = 0; c < columns; ++c) {
++        memcpy((char *) result + c * result_stride, &totals[c], sizeof(float));
++    }
++}
++#endif
++#endif
+--- a/ggml/src/ggml-cpu/arch/x86/quants.c
++++ b/ggml/src/ggml-cpu/arch/x86/quants.c
+@@ -714,8 +714,16 @@
+     *s = sumf;
+ }
+ 
++#include "ptq1-avx2.h"
++#include "ptq1-reuse.h"
++#include "ptq1-pair-lut.h"
++
+ void ggml_vec_dot_ptq1_0_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
+-#if defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
++#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2)
++    assert(nrc == 1);
++    UNUSED(nrc); UNUSED(bs); UNUSED(bx); UNUSED(by);
++    ggml_vec_dot_ptq1_0_q8_0_avx2(n, s, vx, vy);
++#elif defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
+     assert(n % QK_PTQ1_0 == 0);
+     assert(nrc == 1);
+     UNUSED(nrc);
+--- a/tools/server/server-context.cpp
++++ b/tools/server/server-context.cpp
+@@ -1065,6 +1065,9 @@
+             return false;
+         }
+ 
++        // Only the server's target context owns phase pools; draft/MTP
++        // contexts retain their existing pools and never allocate a third one.
++        llama_init->init_cpu_phases(params_base);
+         vocab = llama_model_get_vocab(model_tgt);
+ 
+         n_ctx = llama_n_ctx(ctx_tgt);
+@@ -3593,6 +3596,9 @@
+         // note: the sync is done here too, so that the wait is also covered by the yield
+         int ret = 0;
+         queue_tasks.yield_to_queue([&]() {
++            // Provenance distinguishes one-token prefill from generation and
++            // short verification. Disabled scheduler is a zero-sync no-op.
++            llama_init->select_cpu_phase(common_sandwich_classify(batch.tokens,off,batch_view.n_tokens));
+             ret = llama_decode(ctx_tgt, batch_view);
+             if (ret == 0 && has_output) {
+                 llama_synchronize(ctx_tgt);
+@@ -3822,7 +3828,12 @@
+ 
+             // verify and try to accept the draft
+             {
+-                common_sampler_ptr smpl_save(common_sampler_clone(slot.smpl.get()));
++                // Only checkpoint/replay needs the pre-verification sampler state.
++                // Bounded recurrent rollback keeps the already-accepted sampler state.
++                const bool may_replay =
++                    ctx_tgt_seq_rm_type == COMMON_CONTEXT_SEQ_RM_TYPE_FULL ||
++                    (ctx_tgt_seq_rm_type == COMMON_CONTEXT_SEQ_RM_TYPE_RS && n_draft > llama_n_rs_seq(ctx_tgt));
++                common_sampler_ptr smpl_save(may_replay ? common_sampler_clone(slot.smpl.get()) : nullptr);
+ 
+                 GGML_ASSERT(slot.spec_i_batch.size() == n_draft + 1);
+                 auto accepted = common_sampler_sample_and_accept_n(slot.smpl.get(), slot.ctx_tgt, slot.spec_i_batch, slot.spec_draft);
+@@ -3860,6 +3871,7 @@
+                         slot.mem.seq_rm(slot.id, ckpt.pos_max + 1, -1);
+ 
+                         slot.prompt.tokens.keep_first(ckpt.n_tokens);
++                        GGML_ASSERT(smpl_save);
+                         common_sampler_copy(smpl_save.get(), slot.smpl.get());
+ 
+                         return;
+--- /dev/null
++++ b/ggml/src/ggml-cpu/arch/x86/ptq1-pair-lut.h
+@@ -0,0 +1,79 @@
++// Exact TL1_1-style byte-plane lookup candidate, MIT; no requantization.
++// Included after ptq1-avx2.h. Runtime selection is opt-in, never automatic.
++#ifndef GGML_PTQ1_PAIR_LUT_H
++#define GGML_PTQ1_PAIR_LUT_H
++#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2)
++// Decode only one 128-weight block per row; bounded scratch, no row/tensor copy.
++static void ptq1_block_codes(const block_ptq1_0 * x, uint8_t codes[128]) {
++    __m256i state = _mm256_castsi128_si256(_mm_loadu_si128((const __m128i *) x->qs));
++    state = _mm256_inserti128_si256(state, _mm_loadl_epi64((const __m128i *) (x->qs+16)), 1);
++    for (int j = 0; j < 5; ++j) {
++        uint8_t tmp[32];
++        _mm256_storeu_si256((__m256i *) tmp, ptq1_decode_trits_avx2(&state));
++        memcpy(codes+j*16, tmp, 16);
++        memcpy(codes+80+j*8, tmp+16, 8);
++    }
++    for (int j = 0; j < 8; ++j) {
++        unsigned v = x->qh[j%2];
++        for (int i = 0; i < j/2; ++i) v = (v*3u)&255u;
++        codes[120+j] = (uint8_t) ((v*3u)>>8);
++    }
++}
++
++// A pair has nine exact signed sums, each in [-256,256]. Two byte planes
++// preserve all int16 bits, including -128 activations and sums outside int8.
++static __m256i ptq1_pair_planes(int a, int b) {
++    uint8_t bytes[32] = {0};
++    for (int j = 0; j < 3; ++j) for (int i = 0; i < 3; ++i) {
++        const uint16_t v = (uint16_t) ((i-1)*a+(j-1)*b);
++        bytes[i+3*j] = (uint8_t) v;
++        bytes[16+i+3*j] = (uint8_t) (v>>8);
++    }
++    return _mm256_loadu_si256((const __m256i *) bytes);
++}
++
++void ggml_ptq1_pair_lut_tile(int n, float * result, size_t output_col_stride,
++        const void * vx, size_t weight_row_stride, const void * vy,
++        size_t activation_col_stride, int rows, int columns) {
++    assert(n >= 0 && n%128 == 0 && rows >= 1 && rows <= 16 && columns >= 1 && columns <= 5);
++    float totals[5][16] = {{0}};
++    for (int b = 0; b < n/128; ++b) {
++        uint8_t indices[64][16] = {{0}};
++        float weight_scale[16];
++        for (int r = 0; r < rows; ++r) {
++            const block_ptq1_0 * x = (const block_ptq1_0 *) ((const char *) vx+r*weight_row_stride)+b;
++            uint8_t codes[128];
++            ptq1_block_codes(x, codes);
++            for (int p = 0; p < 64; ++p) indices[p][r] = codes[2*p]+3*codes[2*p+1];
++            weight_scale[r] = GGML_CPU_FP16_TO_FP32(x->d);
++        }
++        for (int c = 0; c < columns; ++c) {
++            const block_q8_0 * y = (const block_q8_0 *) ((const char *) vy+c*activation_col_stride)+4*b;
++            float partial[16] = {0};
++            for (int g = 0; g < 4; ++g) {
++                __m256i sum0 = _mm256_setzero_si256(), sum1 = sum0;
++                for (int p = 0; p < 16; ++p) {
++                    const __m128i index = _mm_loadu_si128((const __m128i *) indices[g*16+p]);
++                    const __m256i looked = _mm256_shuffle_epi8(
++                        ptq1_pair_planes(y[g].qs[2*p], y[g].qs[2*p+1]),
++                        _mm256_broadcastsi128_si256(index));
++                    const __m128i low = _mm256_castsi256_si128(looked);
++                    const __m128i high = _mm256_extracti128_si256(looked,1);
++                    sum0 = _mm256_add_epi32(sum0, _mm256_cvtepi16_epi32(_mm_unpacklo_epi8(low,high)));
++                    sum1 = _mm256_add_epi32(sum1, _mm256_cvtepi16_epi32(_mm_unpackhi_epi8(low,high)));
++                }
++                int32_t sums[16];
++                _mm256_storeu_si256((__m256i *) sums,sum0);
++                _mm256_storeu_si256((__m256i *) (sums+8),sum1);
++                const float scale = GGML_CPU_FP16_TO_FP32(y[g].d);
++                // Same four scale applications and block reduction as upstream.
++                for (int r = 0; r < rows; ++r) partial[r] += scale*sums[r];
++            }
++            for (int r = 0; r < rows; ++r) totals[c][r] += weight_scale[r]*partial[r];
++        }
++    }
++    for (int c = 0; c < columns; ++c)
++        memcpy((char *) result+c*output_col_stride,totals[c],rows*sizeof(float));
++}
++#endif
++#endif
+--- /dev/null
++++ b/common/sandwich-policy.h
+@@ -0,0 +1,57 @@
++// Sandwich-inspired explicit phase selection. MIT, no model or tuning workload.
++#pragma once
++#include <cstdlib>
++#include <stdexcept>
++#include <cstddef>
++
++enum class common_cpu_phase { original, prefill, decode, verify };
++
++// Prompt provenance wins over token count. Mixed batches use the original plan.
++template<class Tokens>
++common_cpu_phase common_sandwich_classify(const Tokens & tokens,int off,int count) {
++    if (off<0 || count<=0 || (size_t)off>tokens.size() || (size_t)count>tokens.size()-(size_t)off)
++        return common_cpu_phase::original;
++    bool prompt=false,generated=false;
++    const auto slot=tokens[(size_t)off].id_slot;
++    for (int i=off;i<off+count;++i) {
++        if (tokens[(size_t)i].id_slot!=slot) return common_cpu_phase::original;
++        prompt|=tokens[(size_t)i].is_prompt;
++        generated|=!tokens[(size_t)i].is_prompt;
++    }
++    if (prompt && generated) return common_cpu_phase::original;
++    if (prompt) return common_cpu_phase::prefill;
++    return count==1 ? common_cpu_phase::decode : common_cpu_phase::verify;
++}
++
++static inline int common_sandwich_threads(const char * text) {
++    if (!text || !*text) return 0;
++    int count=0;
++    for (const char * p=text;*p;++p) {
++        if (*p<'0' || *p>'9' || count>64) throw std::invalid_argument("Sandwich threads must be 1..64 decimal");
++        count=count*10+(*p-'0');
++    }
++    if (count<1 || count>64) throw std::invalid_argument("Sandwich threads must be 1..64");
++    return count;
++}
++
++template<size_t N>
++static bool common_sandwich_mask(const char * hex,bool (&mask)[N],int threads) {
++    if (!hex || !*hex) return false;
++    size_t length=0;
++    while (hex[length]) {
++        if (++length>(N+3)/4) throw std::invalid_argument("Sandwich mask exceeds CPU mask capacity");
++    }
++    for (size_t i=0;i<N;++i) mask[i]=false;
++    int bits=0;
++    for (size_t i=0;i<length;++i) {
++        const char ch=hex[length-1-i];
++        int v=ch>='0' && ch<='9' ? ch-'0' : ch>='a' && ch<='f' ? ch-'a'+10 : ch>='A' && ch<='F' ? ch-'A'+10 : -1;
++        if (v<0) throw std::invalid_argument("Sandwich mask requires plain hexadecimal");
++        for (size_t j=0;j<4;++j) if (v&(1<<j)) {
++            if (4*i+j>=N) throw std::invalid_argument("Sandwich mask exceeds CPU mask capacity");
++            mask[4*i+j]=true; ++bits;
++        }
++    }
++    if (bits<threads) throw std::invalid_argument("Sandwich mask has fewer CPUs than threads");
++    return true;
++}
+--- /dev/null
++++ b/common/sandwich-impl.inc
+@@ -0,0 +1,70 @@
++// Included by common.cpp: the original pools retain ownership and fallback.
++void common_threadpools::init_sandwich(llama_context * ctx,const common_params & params) {
++    if (threadpool_verify) throw std::logic_error("Sandwich pools already initialized");
++    const char * value=std::getenv("LLAMA_SANDWICH_VERIFY_THREADS");
++    const char * mask=std::getenv("LLAMA_SANDWICH_VERIFY_MASK");
++    if ((!value || !*value) && mask && *mask) throw std::invalid_argument("Sandwich mask requires explicit verify threads");
++    const int n=common_sandwich_threads(value);
++    if (!n) return;
++    if (params.n_gpu_layers!=0 || params.n_parallel!=1 || params.embedding)
++        throw std::invalid_argument("Sandwich candidate requires CPU-only, one slot, text generation");
++    if (!threadpool || !free_fn) throw std::runtime_error("Sandwich requires a valid CPU pool");
++    if (params.cpuparams.n_threads<1 || params.cpuparams_batch.n_threads<1)
++        throw std::invalid_argument("Sandwich requires resolved positive decode/prefill thread counts");
++    auto * cpu_dev=ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
++    auto * reg=ggml_backend_dev_backend_reg(cpu_dev);
++    auto * new_fn=(decltype(ggml_threadpool_new) *)ggml_backend_reg_get_proc_address(reg,"ggml_threadpool_new");
++    pause_fn=(decltype(ggml_threadpool_pause) *)ggml_backend_reg_get_proc_address(reg,"ggml_threadpool_pause");
++    if (!new_fn || !pause_fn) throw std::runtime_error("Sandwich CPU pool API unavailable");
++    auto config=params.cpuparams;
++    config.n_threads=n;
++    if (common_sandwich_mask(mask,config.cpumask,n)) { config.mask_valid=true; config.strict_cpu=true; }
++    // An inherited decode mask also needs enough permitted CPUs.
++    if (config.mask_valid) {
++        int permitted=0;
++        for (bool bit:config.cpumask) permitted+=bit;
++        if (permitted<n) throw std::invalid_argument("Inherited CPU mask is too small for verify threads");
++    }
++    auto tpp=ggml_threadpool_params_from_cpu_params(config);
++    tpp.paused=true;
++    threadpool_verify=new_fn(&tpp);
++    if (!threadpool_verify) throw std::runtime_error("Sandwich verify pool creation failed");
++    sandwich_counts[0]=params.cpuparams.n_threads;
++    sandwich_counts[1]=params.cpuparams_batch.n_threads;
++    sandwich_counts[2]=n;
++    sandwich_phase=common_cpu_phase::original;
++    COM_INF("Sandwich source candidate enabled: decode=%d prefill=%d verify=%d; target parity pending\n",
++        sandwich_counts[0],sandwich_counts[1],sandwich_counts[2]);
++    (void)ctx;
++}
++
++void common_threadpools::select_phase(llama_context * ctx,common_cpu_phase phase) {
++    if (!threadpool_verify || phase==sandwich_phase) return;
++    // Drain every outstanding graph before changing pools or counts. No KV edits.
++    llama_synchronize(ctx);
++    pause_fn(threadpool);
++    if (threadpool_batch) pause_fn(threadpool_batch);
++    pause_fn(threadpool_verify);
++    if (phase==common_cpu_phase::original) {
++        llama_set_n_threads(ctx,sandwich_counts[0],sandwich_counts[1]);
++        llama_attach_threadpool(ctx,threadpool,threadpool_batch);
++    } else {
++        auto * selected=phase==common_cpu_phase::verify ? threadpool_verify :
++                       phase==common_cpu_phase::prefill && threadpool_batch ? threadpool_batch : threadpool;
++        const int count=phase==common_cpu_phase::verify ? sandwich_counts[2] :
++                        phase==common_cpu_phase::prefill ? sandwich_counts[1] : sandwich_counts[0];
++        // Both handles/counts match: a one-token prompt is still prefill, and
++        // short verification cannot be forced onto the prefill plan by n_tokens.
++        llama_set_n_threads(ctx,count,count);
++        llama_attach_threadpool(ctx,selected,selected);
++    }
++    sandwich_phase=phase;
++}
++
++void common_init_result::select_cpu_phase(common_cpu_phase phase) {
++    if (pimpl->context) pimpl->threadpools.select_phase(pimpl->context.get(),phase);
++}
++
++void common_init_result::init_cpu_phases(const common_params & params) {
++    if (pimpl->context) pimpl->threadpools.init_sandwich(pimpl->context.get(),params);
++}

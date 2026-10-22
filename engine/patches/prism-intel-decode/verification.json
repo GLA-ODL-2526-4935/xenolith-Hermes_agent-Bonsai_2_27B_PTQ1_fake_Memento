@@ -1,0 +1,19 @@
+{
+  "patch_id": "intel-decode-v3",
+  "patch_apply_hash_reverse": true,
+  "c_dispatch_and_full_matmul_chunk_compile_variants": 5,
+  "cpp_kernel_test_and_benchmark_compiled": [
+    "AVX2 portable signs",
+    "AVX2 BMI2",
+    "AVX2 forced portable signs"
+  ],
+  "actual_scheduler_methods_mock_api_test_compiled": true,
+  "python_tool_tests_passed": 7,
+  "native_code_executed": false,
+  "full_runtime_built": false,
+  "model_loaded": false,
+  "numerical_parity_verified": false,
+  "target_speed_or_DRAM_measured": false,
+  "fixture": "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\decode-three-check-6ke9cz3d",
+  "python_test_output": "test_encodings_and_bitcos_floor (test_tools.Costs.test_encodings_and_bitcos_floor) ... ok\ntest_exact_vs_sample_gate (test_tools.Costs.test_exact_vs_sample_gate) ... ok\ntest_reader_rejects_truncation_and_lengths (test_tools.Costs.test_reader_rejects_truncation_and_lengths) ... ok\ntest_bounded_stable_and_key_invalidates (test_tools.Plans.test_bounded_stable_and_key_invalidates) ... ok\ntest_cost_gate_rejects_noise_wrongness_and_wrong_key (test_tools.Plans.test_cost_gate_rejects_noise_wrongness_and_wrong_key) ... ok\ntest_fixture_sysfs_obeys_allowed_and_online (test_tools.Plans.test_fixture_sysfs_obeys_allowed_and_online) ... ok\ntest_topology_not_power_of_two_and_no_smt_double_count (test_tools.Plans.test_topology_not_power_of_two_and_no_smt_double_count) ... ok\n\n----------------------------------------------------------------------\nRan 7 tests in 0.027s\n\nOK\n"
+}

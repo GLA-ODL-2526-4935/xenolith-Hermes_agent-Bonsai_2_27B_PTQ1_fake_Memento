@@ -1,0 +1,17 @@
+{
+  "patch_check": true,
+  "apply_output_hashes": true,
+  "reverse_roundtrip": true,
+  "installer_python_syntax": true,
+  "c_dispatch_compile": [
+    "AVX2",
+    "AVX2 forced baseline",
+    "SSE2"
+  ],
+  "cpp_comparison_test_object_compiled": true,
+  "native_code_executed": false,
+  "full_runtime_built": false,
+  "model_loaded": false,
+  "performance_measured": false,
+  "fixture": "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\ptq1-patch-check-fww3xujo"
+}

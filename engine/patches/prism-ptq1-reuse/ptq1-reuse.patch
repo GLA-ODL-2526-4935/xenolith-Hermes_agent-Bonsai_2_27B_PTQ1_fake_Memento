@@ -1,0 +1,190 @@
+--- a/ggml/src/ggml-cpu/arch/x86/quants.c
++++ b/ggml/src/ggml-cpu/arch/x86/quants.c
+@@ -714,8 +714,15 @@
+     *s = sumf;
+ }
+ 
++#include "ptq1-avx2.h"
++#include "ptq1-reuse.h"
++
+ void ggml_vec_dot_ptq1_0_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {
+-#if defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
++#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2)
++    assert(nrc == 1);
++    UNUSED(nrc); UNUSED(bs); UNUSED(bx); UNUSED(by);
++    ggml_vec_dot_ptq1_0_q8_0_avx2(n, s, vx, vy);
++#elif defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
+     assert(n % QK_PTQ1_0 == 0);
+     assert(nrc == 1);
+     UNUSED(nrc);
+--- a/ggml/src/ggml-cpu/ggml-cpu.c
++++ b/ggml/src/ggml-cpu/ggml-cpu.c
+@@ -1246,6 +1246,26 @@
+ 
+     const size_t src1_col_stride = src1_cont || src1->type != vec_dot_type ? row_size : nb11;
+ 
++    // Opt-in tiny-batch verification: share packed-weight unpack across columns.
++    // Higher dimensions/broadcasts and reference requests keep the original path.
++#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2) && defined(GGML_PTQ1_ENABLE_BATCH)
++    const int64_t ptq1_columns = ir1_end - ir1_start;
++    if (!params->use_ref && src0->type == GGML_TYPE_PTQ1_0 &&
++        vec_dot_type == GGML_TYPE_Q8_0 && num_rows_per_vec_dot == 1 &&
++        ne02 == 1 && ne03 == 1 && ne12 == 1 && ne13 == 1 &&
++        ne11 >= 2 && ne11 <= 5 && ptq1_columns >= 2 && ptq1_columns <= 5 &&
++        ir1_start >= 0 && ir1_end <= ne11 && nb0 == sizeof(float)) {
++        const char * ptq1_y = (const char *) wdata + ir1_start * src1_col_stride;
++        float * ptq1_dst = (float *) ((char *) dst->data + ir1_start * nb1);
++        for (int64_t ir0 = ir0_start; ir0 < ir0_end; ++ir0) {
++            ggml_vec_dot_ptq1_0_q8_0_batch(ne00, ptq1_dst + ir0, nb1,
++                (const char *) src0->data + ir0 * nb01, ptq1_y,
++                src1_col_stride, (int) ptq1_columns);
++        }
++        return;
++    }
++#endif
++
+     // attempt to reduce false-sharing (does not seem to make a difference)
+     // 16 * 2, accounting for mmla kernels
+     float tmp[32];
+--- a/ggml/src/ggml-cpu/quants.h
++++ b/ggml/src/ggml-cpu/quants.h
+@@ -45,6 +45,11 @@
+ void ggml_vec_dot_pq2_0_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc);
+ void ggml_vec_dot_pq2_0_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc);
+ void ggml_vec_dot_ptq1_0_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc);
++
++#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2) && defined(GGML_PTQ1_ENABLE_BATCH)
++void ggml_vec_dot_ptq1_0_q8_0_batch(int n, float * GGML_RESTRICT result, size_t result_stride,
++    const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, size_t column_stride, int columns);
++#endif
+ void ggml_vec_dot_q4_0_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc);
+ void ggml_vec_dot_q4_1_q8_1(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc);
+ void ggml_vec_dot_q5_0_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc);
+--- /dev/null
++++ b/ggml/src/ggml-cpu/arch/x86/ptq1-avx2.h
+@@ -0,0 +1,66 @@
++// PTQ1 AVX2 source candidate. Upstream llama.cpp MIT license applies.
++// Included after the existing SSE helpers in arch/x86/quants.c.
++#ifndef GGML_PTQ1_AVX2_H
++#define GGML_PTQ1_AVX2_H
++#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2)
++static inline __m256i ptq1_decode_trits_avx2(__m256i * state) {
++    const __m256i biased = _mm256_xor_si256(*state, _mm256_set1_epi8(-128));
++    const __m256i ge1 = _mm256_cmpgt_epi8(biased, _mm256_set1_epi8(85 - 128));
++    const __m256i ge2 = _mm256_cmpgt_epi8(biased, _mm256_set1_epi8(170 - 128));
++    *state = _mm256_add_epi8(*state, _mm256_add_epi8(*state, *state));
++    return _mm256_sub_epi8(_mm256_setzero_si256(), _mm256_add_epi8(ge1, ge2));
++}
++
++static inline __m256i ptq1_dot_codes_avx2(__m256i codes, __m256i activation) {
++    // Unsigned 0..2 codes avoid the int8 -128 negation trap. The intermediate
++    // pair sums are bounded by 512 in magnitude, so maddubs does not saturate.
++    const __m256i ones8 = _mm256_set1_epi8(1);
++    const __m256i dot = _mm256_maddubs_epi16(codes, activation);
++    const __m256i offset = _mm256_maddubs_epi16(ones8, activation);
++    return _mm256_madd_epi16(_mm256_sub_epi16(dot, offset), _mm256_set1_epi16(1));
++}
++
++static void ggml_vec_dot_ptq1_0_q8_0_avx2(
++        int n, float * GGML_RESTRICT result,
++        const block_ptq1_0 * GGML_RESTRICT x,
++        const block_q8_0 * GGML_RESTRICT y) {
++    assert(n % QK_PTQ1_0 == 0);
++    const __m128i zero = _mm_setzero_si128();
++    float sumf = 0.0f;
++    for (int i = 0; i < n / QK_PTQ1_0; ++i) {
++        const block_q8_0 * yb = &y[i * 4];
++        __m128i sums[4] = {zero, zero, zero, zero};
++        // Bounded 16 + 8 byte loads, never a 32-byte read of a 24-byte payload.
++        // Low lane: weights 0..79. High lane: weights 80..119, eight at a time.
++        __m256i packed = _mm256_castsi128_si256(_mm_loadu_si128((const __m128i *) x[i].qs));
++        packed = _mm256_inserti128_si256(packed, _mm_loadl_epi64((const __m128i *) &x[i].qs[16]), 1);
++        for (int j = 0; j < 5; ++j) {
++            const int offset = 80 + j * 8;
++            const __m128i main_y = _mm_loadu_si128((const __m128i *) &yb[j / 2].qs[(j % 2) * 16]);
++            const __m128i tail_y = _mm_loadl_epi64((const __m128i *) &yb[offset / 32].qs[offset % 32]);
++            __m256i qy = _mm256_castsi128_si256(main_y);
++            qy = _mm256_inserti128_si256(qy, tail_y, 1);
++            const __m256i dot = ptq1_dot_codes_avx2(ptq1_decode_trits_avx2(&packed), qy);
++            sums[j / 2] = _mm_add_epi32(sums[j / 2], _mm256_castsi256_si128(dot));
++            sums[offset / 32] = _mm_add_epi32(sums[offset / 32], _mm256_extracti128_si256(dot, 1));
++        }
++        // Eight final trits retain upstream element ordering and bounded loads.
++        uint16_t qh;
++        memcpy(&qh, x[i].qh, sizeof(qh));
++        __m128i tail = _mm_unpacklo_epi8(_mm_set1_epi16((int16_t) qh), zero);
++        tail = _mm_and_si128(_mm_mullo_epi16(tail, _mm_setr_epi16(1, 1, 3, 3, 9, 9, 27, 27)), _mm_set1_epi16(255));
++        const __m128i q = decode_trits_sse2(&tail);
++        const __m128i qy = _mm_loadl_epi64((const __m128i *) &yb[3].qs[24]);
++        const __m128i sy = _mm_cmpgt_epi8(zero, qy);
++        sums[3] = _mm_add_epi32(sums[3], _mm_madd_epi16(q, _mm_unpacklo_epi8(qy, sy)));
++        // Preserve upstream floating accumulation order and four Q8 scales.
++        float sumi = 0.0f;
++        for (int k = 0; k < 4; ++k) {
++            sumi += GGML_CPU_FP16_TO_FP32(yb[k].d) * hsum_i32_4_sse2(sums[k]);
++        }
++        sumf += GGML_CPU_FP16_TO_FP32(x[i].d) * sumi;
++    }
++    *result = sumf;
++}
++#endif
++#endif
+--- /dev/null
++++ b/ggml/src/ggml-cpu/arch/x86/ptq1-reuse.h
+@@ -0,0 +1,56 @@
++// Source-only PTQ1 tiny-batch candidate; llama.cpp MIT license applies.
++// Included after ptq1-avx2.h in arch/x86/quants.c.
++#ifndef GGML_PTQ1_REUSE_H
++#define GGML_PTQ1_REUSE_H
++#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2) && defined(GGML_PTQ1_ENABLE_BATCH)
++void ggml_vec_dot_ptq1_0_q8_0_batch(
++        int n, float * GGML_RESTRICT result, size_t result_stride,
++        const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy,
++        size_t column_stride, int columns) {
++    assert(n >= 0 && n % QK_PTQ1_0 == 0);
++    assert(columns >= 2 && columns <= 5);
++    const block_ptq1_0 * x = (const block_ptq1_0 *) vx;
++    const __m128i zero = _mm_setzero_si128();
++    float totals[5] = {0, 0, 0, 0, 0};
++    for (int i = 0; i < n / QK_PTQ1_0; ++i) {
++        // Keep one decoded block in registers/stack, not an expanded weight row.
++        // Decode and read the packed payload once for all verification columns.
++        __m256i codes[5];
++        __m256i packed = _mm256_castsi128_si256(_mm_loadu_si128((const __m128i *) x[i].qs));
++        packed = _mm256_inserti128_si256(packed, _mm_loadl_epi64((const __m128i *) &x[i].qs[16]), 1);
++        for (int j = 0; j < 5; ++j) {
++            codes[j] = ptq1_decode_trits_avx2(&packed);
++        }
++        uint16_t qh;
++        memcpy(&qh, x[i].qh, sizeof(qh));
++        __m128i tail = _mm_unpacklo_epi8(_mm_set1_epi16((int16_t) qh), zero);
++        tail = _mm_and_si128(_mm_mullo_epi16(tail, _mm_setr_epi16(1, 1, 3, 3, 9, 9, 27, 27)), _mm_set1_epi16(255));
++        const __m128i last_codes = decode_trits_sse2(&tail);
++        const float scale = GGML_CPU_FP16_TO_FP32(x[i].d);
++        for (int c = 0; c < columns; ++c) {
++            const block_q8_0 * yb = (const block_q8_0 *) ((const char *) vy + c * column_stride) + i * 4;
++            __m128i sums[4] = {zero, zero, zero, zero};
++            for (int j = 0; j < 5; ++j) {
++                const int offset = 80 + j * 8;
++                __m256i qy = _mm256_castsi128_si256(_mm_loadu_si128((const __m128i *) &yb[j / 2].qs[(j % 2) * 16]));
++                qy = _mm256_inserti128_si256(qy, _mm_loadl_epi64((const __m128i *) &yb[offset / 32].qs[offset % 32]), 1);
++                const __m256i dot = ptq1_dot_codes_avx2(codes[j], qy);
++                sums[j / 2] = _mm_add_epi32(sums[j / 2], _mm256_castsi256_si128(dot));
++                sums[offset / 32] = _mm_add_epi32(sums[offset / 32], _mm256_extracti128_si256(dot, 1));
++            }
++            const __m128i qy = _mm_loadl_epi64((const __m128i *) &yb[3].qs[24]);
++            sums[3] = _mm_add_epi32(sums[3], _mm_madd_epi16(last_codes, _mm_unpacklo_epi8(qy, _mm_cmpgt_epi8(zero, qy))));
++            // Keep the single-column scale and accumulation order unchanged.
++            float sumi = 0.0f;
++            for (int k = 0; k < 4; ++k) {
++                sumi += GGML_CPU_FP16_TO_FP32(yb[k].d) * hsum_i32_4_sse2(sums[k]);
++            }
++            totals[c] += scale * sumi;
++        }
++    }
++    for (int c = 0; c < columns; ++c) {
++        memcpy((char *) result + c * result_stride, &totals[c], sizeof(float));
++    }
++}
++#endif
++#endif
