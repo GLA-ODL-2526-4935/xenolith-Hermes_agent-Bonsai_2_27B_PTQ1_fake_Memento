@@ -118,3 +118,26 @@ were compiled as objects only. Full runtime, numerical parity, affinity/races,
 RSS/DRAM and speed remain unverified; no model/native executable/GPU/WSL was run.
 Native CPU pools (`GGML_OPENMP=OFF`) are required for this scheduler's affinity/
 pause behavior. The deployment target's memory reserve remains a separate decision.
+
+
+## Additional Intel inference increment — 22 October 2026
+
+[Optional delta on v3](patches/prism-intel-decode-increment/README.md): exact compact
+LUT integer accumulation/SIMD construction/scratch work and single-copy owned MTP
+hidden-row capture. Each flag defaults off; no KV/recurrent checkpoint elision or
+Intel Vulkan architecture change. Existing unpack/table reuse is not counted again.
+Four Python oracles, patch integrity/reversal and compiler checks pass; native
+tests are compiled only. No model/native engine run or measured speedup is claimed.
+
+Additional sources and decisions ([full review](docs/ADDITIONAL_INFERENCE_REVIEW.md)):
+
+| Paper | New mechanism considered; current disposition |
+| --- | --- |
+| [FLUTE](https://arxiv.org/abs/2407.10960) | Execution-aligned lossless packed layout; a future one-representation experiment. No resident conversion or second weight cache added. |
+| [LUT-GEMM](https://arxiv.org/abs/2206.09557) | Fused lookup/accumulation overlaps existing packed paths; no BCQ requantization or duplicate kernel port. |
+| [Ghidorah](https://arxiv.org/abs/2505.23219) | Contention-aware heterogeneous profiling; existing CPU phase planning retained, concurrent Intel CPU/iGPU tensor partitioning deferred. |
+| [ReplaySSM](https://arxiv.org/abs/2610.13778) | Recurrent input replay/output-only verification; floating evaluation changes and backend rewrite need separate correctness work. Existing rollback retained. |
+
+These four papers were investigated, not newly ported in full. The local LUT
+engineering continues the prior bitnet.cpp/T-MAC source candidates; all earlier
+paper references and their implementation-status limitations still apply.

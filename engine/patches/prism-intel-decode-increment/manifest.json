@@ -1,0 +1,23 @@
+{
+  "patch_id": "intel-decode-increment-v1",
+  "commit": "ff414120c343e6e6cb868013c99f1dde52b27e70",
+  "repository": "https://github.com/sudoingX/llama.cpp",
+  "requires_patch_id": "intel-decode-v3",
+  "base_manifest_sha256": "3b875b6449f20aa65495a1ccbaf503bdcf5ec75a1577f0b6bb21d51a97a09eb9",
+  "requires_patch_sha256": "772f74196c4168fea5b1c4c6f9a7347b152d229670c28f22beec8101ae3942f7",
+  "patch_sha256": "25cf4633edb568e964c6f9b17e909c955427d9964673fd435fb2ff71c91f9d23",
+  "files": {
+    "ggml/src/ggml-cpu/arch/x86/ptq1-pair-lut.h": {
+      "before_sha256": "e9aac498caf97bf7c049c5f315bee886e35e3b8fc838ee7664c42ccff0864dce",
+      "after_sha256": "4c87852023c9177fc90e5b121607703f68a6bd86e7ad8e07449e576a79ee09a0"
+    },
+    "common/speculative.cpp": {
+      "before_sha256": "70debaf4485a0799575fccf4898969f8135825ca93f620ee9aac7950ac28ba1a",
+      "after_sha256": "51bf2690e3fbc4a99a56b518c930f507feb6ea7fea1a88495076c0cb1a5eaf8a"
+    },
+    "common/mtp-verify-copy.h": {
+      "before_sha256": null,
+      "after_sha256": "4a8beac2f93e8705c53bdc62c98fb67fe80c7133814c416534f6414776675661"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "patch_id": "intel-decode-increment-v1",
+  "patch_apply_hash_reverse": true,
+  "oracle_tests_passed": 4,
+  "apply_helper_real_patch_fixture_checks": "dry-run/apply/reverse, reject double application and unrelated prerequisite drift; HEAD query mocked",
+  "original_and_compact_kernel_benchmark_objects_compiled": true,
+  "actual_dispatch_fallback_variants": 3,
+  "actual_mtp_capture_and_acceptance_hook_compile_both_flags": true,
+  "before_after_exhaustive_cpp_test_compiled": true,
+  "native_code_executed": false,
+  "full_runtime_built": false,
+  "model_loaded": false,
+  "native_numerical_parity_verified": false,
+  "speed_or_DRAM_measured": false,
+  "fixture": "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\decode-increment-check-1brclqeh",
+  "test_output": "test_all_pair_tables (test_oracles.Oracles.test_all_pair_tables) ... ok\ntest_all_tail_encodings (test_oracles.Oracles.test_all_tail_encodings) ... ok\ntest_capture_acceptance_contract (test_oracles.Oracles.test_capture_acceptance_contract) ... ok\ntest_int16_group_bound_and_scale_partition (test_oracles.Oracles.test_int16_group_bound_and_scale_partition) ... ok\n\n----------------------------------------------------------------------\nRan 4 tests in 0.391s\n\nOK\n"
+}

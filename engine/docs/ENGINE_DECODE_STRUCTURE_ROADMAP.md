@@ -244,3 +244,15 @@ migration or a new joint online MTP controller. Original model and head stay int
 Seven Python tests and source/compile checks pass; no native code or model was run.
 Earlier plan-only status is superseded only for these source components. Priority
 and compatibility choices still require actual target evidence, not paper speedups.
+
+
+## Additional source increment and research — 22 October 2026
+
+Checklist4C and [additional review](ADDITIONAL_INFERENCE_REVIEW.md) cover four newly
+investigated papers and explicit overlap/defer decisions. [Optional v3 delta](../patches/prism-intel-decode-increment/README.md)
+adds E1 exact LUT local-work and E2 MTP owned hidden-row copy candidates. It changes
+three source paths with independent disabled flags and exact prerequisite/hash
+checks, preserving KV/recurrent rollback and existing Intel Vulkan routing. Four
+Python oracle tests and compile/patch checks pass; native tests/full runtime/model
+parity and target performance remain pending. New packed-layout conversion,
+CPU/iGPU tensor partitioning and ReplaySSM reassociation are not implemented.

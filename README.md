@@ -163,3 +163,10 @@ these are design gates, not measured speed gains or newly activated runtime code
 The three priority papers now have an [inactive source package](engine/patches/prism-intel-decode/README.md)
 and implementation status in checklist 4B. BITCOS remains a conditional codec/kernel
 experiment; full target runtime/parity/performance validation is pending for all paths.
+
+
+Additional engine source work is in the [optional v3 increment](engine/patches/prism-intel-decode-increment/README.md)
+and [additional paper review](engine/docs/ADDITIONAL_INFERENCE_REVIEW.md): exact
+LUT local-work reductions and owned MTP hidden-row copy reuse, both inactive and
+reversible. Native target parity/DRAM/speed validation is still pending; this does
+not change live profiles or the Intel Vulkan architecture.

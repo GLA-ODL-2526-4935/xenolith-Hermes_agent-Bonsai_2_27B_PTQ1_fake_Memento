@@ -1,0 +1,66 @@
+{
+  "repository": "https://github.com/sudoingX/llama.cpp",
+  "commit": "ff414120c343e6e6cb868013c99f1dde52b27e70",
+  "patch_id": "intel-decode-v3",
+  "status": "source_only_optional_LUT_and_phase_scheduler_target_validation_pending",
+  "composition": "Cumulative: replaces ptq1-avx2-v1, ptq1-reuse-v2 and cpu-mtp-v1/greedy-mtp. Never stack these patches.",
+  "patch_sha256": "772f74196c4168fea5b1c4c6f9a7347b152d229670c28f22beec8101ae3942f7",
+  "files": {
+    "common/arg.cpp": {
+      "before_sha256": "8ad9d71866c3cc82bee06cd646351d26bb8c07e6c93184100d69433994e67b15",
+      "after_sha256": "f1e8d089b864aa72cd33c85f5ab0d1d213d7800b050f067b71ac58e21f8b765a"
+    },
+    "common/common.cpp": {
+      "before_sha256": "7f58e40159fba2afd18f72e8678ba031b1a68f16e307a2287ef6c5570f8bdf4f",
+      "after_sha256": "8ee11faf1f1fdfe44b6330c3867b557654555258fbe62e922493f60afcaef570"
+    },
+    "common/common.h": {
+      "before_sha256": "1296275b07e78f54240d0ae94a051c1d38388a9de979ff9f578422c2fade0b5f",
+      "after_sha256": "d998c2f0afe20e538129bbc6f904f44835a6e7c64478d2da245f82683774f015"
+    },
+    "common/mtp-cpu-policy.h": {
+      "before_sha256": null,
+      "after_sha256": "29c02cff3a2a0ce7fdc0d65234b551bb63c2682756f605040140ca289d38fa91"
+    },
+    "common/speculative.cpp": {
+      "before_sha256": "53f94ac47bb64e6fb6871ca7d003743acab5dcb5686df2605f3e1cdded846a69",
+      "after_sha256": "70debaf4485a0799575fccf4898969f8135825ca93f620ee9aac7950ac28ba1a"
+    },
+    "ggml/src/ggml-cpu/ggml-cpu.c": {
+      "before_sha256": "19b5bd6f4a2e360312c9d3e2aa4204115712b7a5f54d4b990554fbd1cc18cded",
+      "after_sha256": "ecc4f8925d45936095305714b9b5618dd4ce050af8cddf1b4b3321c073a62a9d"
+    },
+    "ggml/src/ggml-cpu/quants.h": {
+      "before_sha256": "acb785971dc4e71889bf498ee8461aaf33b8d72ddc517331014e7df7119e4c69",
+      "after_sha256": "14a9b6f2aaf02bca0bebada845d98cbefa458e48149929d155fd18a710a7673e"
+    },
+    "ggml/src/ggml-cpu/arch/x86/ptq1-avx2.h": {
+      "before_sha256": null,
+      "after_sha256": "9757c0320ee17a1546948f5919bb158142d94c74ce40768bf70f198978b79873"
+    },
+    "ggml/src/ggml-cpu/arch/x86/ptq1-reuse.h": {
+      "before_sha256": null,
+      "after_sha256": "808bd218cafcbef7e59a1d92ebd1f794d8618c840276b66ade2d125b1083c0fa"
+    },
+    "ggml/src/ggml-cpu/arch/x86/quants.c": {
+      "before_sha256": "01197de2c904c430502c737b0c6084f20bda3e9b7d5063b10c2cbed75b60e041",
+      "after_sha256": "83562aed46a6ea878474040ea5f423edb35ad6bcbe53bd38dbcc111a37e78553"
+    },
+    "tools/server/server-context.cpp": {
+      "before_sha256": "6076fec9aec5948ec16e3c585fd2d0feb885bd5bfa5fca09eb0c7427e88ac104",
+      "after_sha256": "1617a77aec53242586fbb4e924a4f11aef29ee35ae395a5b9c7191e24edf57bd"
+    },
+    "ggml/src/ggml-cpu/arch/x86/ptq1-pair-lut.h": {
+      "before_sha256": null,
+      "after_sha256": "e9aac498caf97bf7c049c5f315bee886e35e3b8fc838ee7664c42ccff0864dce"
+    },
+    "common/sandwich-policy.h": {
+      "before_sha256": null,
+      "after_sha256": "2b01d87a20e9f645224d31800b0c61752899e48b5f28d8d40d9ef211555bc35c"
+    },
+    "common/sandwich-impl.inc": {
+      "before_sha256": null,
+      "after_sha256": "7c3c2cc470992670a844555b6a5f94c229c173bc8ff05f4698c07522a076be1c"
+    }
+  }
+}
