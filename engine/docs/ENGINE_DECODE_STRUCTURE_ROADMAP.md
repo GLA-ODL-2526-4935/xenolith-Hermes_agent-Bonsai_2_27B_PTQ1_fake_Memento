@@ -256,3 +256,15 @@ checks, preserving KV/recurrent rollback and existing Intel Vulkan routing. Four
 Python oracle tests and compile/patch checks pass; native tests/full runtime/model
 parity and target performance remain pending. New packed-layout conversion,
 CPU/iGPU tensor partitioning and ReplaySSM reassociation are not implemented.
+
+
+## Next selection priorities — five-paper review
+
+[Detailed review](FIVE_PAPER_SELECTION_REVIEW.md) and checklist4D select F1 ordinary
+decoding/off with complete cost accounting, F2 bounded suffix-chain lookup, then F3
+joint cost-aware source/window choice using the existing MTP head. These consolidate
+the earlier D-Q off/budget idea; no competing selector is proposed. Keep Sandwich
+phase plans fixed during selection experiments. F4 is bounded cache/register PTQ1
+tuning; F5 is an exact adjacent-normalization fusion audit. F6 tree execution stays
+exploratory until recurrence/state/Intel compatibility is established. All are
+design only; present1..4-window tuning still lacks off/source selection.

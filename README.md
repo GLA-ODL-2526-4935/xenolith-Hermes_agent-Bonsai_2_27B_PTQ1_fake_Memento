@@ -170,3 +170,17 @@ and [additional paper review](engine/docs/ADDITIONAL_INFERENCE_REVIEW.md): exact
 LUT local-work reductions and owned MTP hidden-row copy reuse, both inactive and
 reversible. Native target parity/DRAM/speed validation is still pending; this does
 not change live profiles or the Intel Vulkan architecture.
+
+
+The [draft-selection paper review](engine/docs/FIVE_PAPER_SELECTION_REVIEW.md)
+prioritizes a bounded suffix-chain source and one cost-aware selector that can use
+the existing MTP head or disable speculation. QIGen-style CPU tuning is selected
+for later validation; normalization algebra changes and hybrid tree execution are
+restricted/deferred. Checklist4D records design and acceptance gates; this research
+revision adds no runtime implementation or live configuration change.
+
+
+Engine source update (23 October 2026): [optional source-selection/QIGen package](engine/patches/prism-source-selection/README.md)
+adds bounded suffix/MTP/warm-off selection and separate PTQ1 schedule switches.
+Inactive, source/compiler checked; native/model correctness and speed remain to
+be measured. Requires exact v3 plus increment-v1; no live profile was changed.

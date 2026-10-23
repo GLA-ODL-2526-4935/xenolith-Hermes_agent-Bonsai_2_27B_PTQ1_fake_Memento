@@ -1,0 +1,14 @@
+{
+  "patch_id": "intel-source-selection-v1",
+  "patch_apply_hash_reverse": true,
+  "helper_checks": "dry/apply/reverse/double apply/drift; fixture HEAD mocked",
+  "actual_source_hooks_compiled": true,
+  "actual_cpu_chunk_variants_compiled": 7,
+  "kernel_objects_and_later_run_tests_compiled": true,
+  "offline_tests": "test_baseline_only (test_offline.Offline.test_baseline_only) ... ok\ntest_numerically_failed_candidate (test_offline.Offline.test_numerically_failed_candidate) ... ok\ntest_per_width_tuning (test_offline.Offline.test_per_width_tuning) ... ok\ntest_reject_ambiguous_input (test_offline.Offline.test_reject_ambiguous_input) ... ok\ntest_reject_invalid_measurements (test_offline.Offline.test_reject_invalid_measurements) ... ok\ntest_source_scope_and_lifecycle_contract (test_offline.Offline.test_source_scope_and_lifecycle_contract) ... ok\ntest_tail_latency_and_small_gain (test_offline.Offline.test_tail_latency_and_small_gain) ... ok\n\n----------------------------------------------------------------------\nRan 7 tests in 0.001s\n\nOK\n",
+  "native_code_executed": false,
+  "full_runtime_built": false,
+  "model_loaded": false,
+  "speedup_measured": false,
+  "fixture": "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\source-policy-check-947gdbt7"
+}

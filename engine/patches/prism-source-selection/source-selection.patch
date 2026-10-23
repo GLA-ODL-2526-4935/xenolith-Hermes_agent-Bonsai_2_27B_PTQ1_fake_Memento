@@ -1,0 +1,446 @@
+--- a/common/speculative.cpp
++++ b/common/speculative.cpp
+@@ -1,5 +1,7 @@
+ #include "speculative.h"
+ #include "mtp-cpu-policy.h"
++#include "source-policy.h"
++#include <stdexcept>
+ #if defined(LLAMA_MTP_COMPACT_VERIFY)
+ #include "mtp-verify-copy.h"
+ #endif
+@@ -3026,6 +3028,12 @@
+ 
+     // which implementaion was used for a given seq_id
+     std::vector<common_speculative_impl *> impl_last;
++    bool source_policy = false;
++    bool suffix_enabled = false;
++    int source_cap = 0;
++    int source_force = -1; // explicit later-run A/B control, not an autotuner
++    common_source_policy policy; // single-slot experimental server mode only
++
+ };
+ 
+ static common_ngram_map get_common_ngram_map(
+@@ -3393,6 +3401,29 @@
+         add_config_if_enabled(COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK, params.draft.ctx_dft != nullptr);
+     }
+ 
++    const char * source_env = std::getenv("LLAMA_SPEC_SOURCE_POLICY");
++    const bool source_policy = source_env && std::strcmp(source_env,"1")==0;
++    const char * suffix_env = std::getenv("LLAMA_SPEC_SUFFIX");
++    const bool suffix_enabled = suffix_env && std::strcmp(suffix_env,"1")==0;
++    const char * force_env = std::getenv("LLAMA_SPEC_SOURCE_FORCE");
++    int source_force=-1;
++    if (source_policy && force_env) {
++        if (std::strlen(force_env)!=1 || force_env[0]<'0' || force_env[0]>'8' ||
++                (force_env[0]>'4' && !suffix_enabled)) {
++            throw std::runtime_error("source force must be 0..8; suffix arms need LLAMA_SPEC_SUFFIX=1");
++        }
++        source_force=force_env[0]-'0';
++    }
++    if (source_policy) {
++        // No multiple stateful implementations, concurrent slots or unbounded
++        // drafts hidden behind this experiment. Fail before model drafting.
++        if (n_seq!=1 || configs.size()!=1 || configs[0].type!=COMMON_SPECULATIVE_TYPE_DRAFT_MTP ||
++                params.draft.n_max<1 || params.draft.n_max>4 || params.draft.n_min>1) {
++            throw std::runtime_error("source policy requires one slot, only draft-mtp, max 1..4, min <=1");
++        }
++        params.draft.adaptive=false; // replace, never nest, the old window tuner
++        configs[0].params.draft.adaptive=false;
++    }
+     std::vector<std::unique_ptr<common_speculative_impl>> impls = {};
+ 
+     for (const common_speculative_config & config : configs) {
+@@ -3486,7 +3517,42 @@
+         /* .impl_last = */ std::vector<common_speculative_impl *>(n_seq, nullptr)
+     };
+ 
++    result->source_policy=source_policy;
++    result->suffix_enabled=suffix_enabled;
++    result->source_cap=std::min(4,params.draft.n_max);
++    result->source_force=source_force;
+     return result;
++}
++
++void common_speculative_cycle_begin(common_speculative * spec, llama_seq_id seq_id, int cap, bool greedy, int context) {
++    if (!spec || !spec->source_policy || seq_id!=0) return;
++    if (!greedy) { spec->policy.active=false; return; } // legacy path for stochastic requests
++    const bool replay=spec->policy.active;
++    cap=std::max(0,std::min(cap,spec->source_cap));
++    spec->policy.begin(cap,spec->suffix_enabled,ggml_time_us(),context/4096);
++    if (!replay && spec->source_force>=0) {
++        const int a=spec->source_force;
++        spec->policy.arm=(a>4?a-4:a)<=cap?a:0;
++    }
++}
++
++void common_speculative_cycle_finish(common_speculative * spec, llama_seq_id seq_id, int committed) {
++    if (!spec || !spec->source_policy || seq_id!=0) return;
++    // process() may enqueue draft catch-up asynchronously. Synchronize before
++    // rewarding any source, including warm off, rather than charge it later.
++    if (spec->policy.active) {
++        for (auto & impl:spec->impls) {
++            auto * mtp=static_cast<common_speculative_impl_draft_mtp *>(impl.get());
++            llama_synchronize(mtp->params.ctx_dft);
++        }
++    }
++    const int arm=spec->policy.arm;
++    const int64_t now=ggml_time_us();
++    const int64_t elapsed=now-spec->policy.started;
++    if (spec->policy.finish(committed,now)) {
++        SPC_DBG("source arm=%d unique_tokens=%d elapsed_us=%" PRId64 " bucket=%d cycles=%" PRIu64 " warm_off=1\n",
++                arm,committed,elapsed,spec->policy.context_bucket,spec->policy.cycles);
++    }
+ }
+ 
+ void common_speculative_free(common_speculative * spec) {
+@@ -3511,6 +3577,10 @@
+         return;
+     }
+ 
++    if (spec->source_policy) {
++        spec->policy.reset();
++        spec->impl_last[seq_id]=nullptr;
++    }
+     for (auto & impl : spec->impls) {
+         common_time_meas tm(impl->t_begin_us, !impl->gen_perf);
+         impl->begin(seq_id, prompt);
+@@ -3555,6 +3625,21 @@
+         }
+     }
+ 
++    if (spec->source_policy && spec->policy.active) {
++        auto & dp=dparams[0];
++        spec->impl_last[0]=nullptr; // no stale MTP ownership on off/lookup miss
++        const int arm=spec->policy.arm;
++        if (arm==0 || arm>4) {
++            if (arm>4 && dp.drafting) {
++                const int cap=dp.n_max<0?arm-4:std::min(arm-4,dp.n_max);
++                *dp.result=common_suffix_chain(*dp.prompt,dp.id_last,cap);
++            }
++            dp.drafting=false;
++            return;
++        }
++        dp.n_max=dp.n_max<0?arm:std::min(arm,dp.n_max);
++        // Exactly one MTP implementation; ordinary verification and hooks below.
++    }
+     for (auto & impl : spec->impls) {
+         {
+             common_time_meas tm(impl->t_draft_us, !impl->gen_perf);
+@@ -3621,7 +3706,13 @@
+     common_speculative_impl * impl = spec->impl_last[seq_id];
+ 
+     if (impl == nullptr) {
+-        GGML_ASSERT(n_accepted == 0);
++        if (spec->source_policy && spec->policy.active) {
++            // Suffix drafts still advance the warm MTP carryover at the exact
++            // accepted hidden row. Do not skip reconciliation on source switches.
++            for (auto & other:spec->impls) other->accept(seq_id,n_accepted,true);
++        } else {
++            GGML_ASSERT(n_accepted == 0);
++        }
+         return;
+     }
+ 
+@@ -3693,6 +3784,13 @@
+         return;
+     }
+ 
++    if (spec->source_policy) {
++        for (int arm=0;arm<9;++arm) {
++            const auto & v=spec->policy.stats[arm];
++            SPC_INF("source arm=%d cycles=%" PRIu64 " tokens=%" PRIu64 " elapsed_us=%" PRIu64 " warm_off=1\n",
++                    arm,v.samples,v.tokens,v.us);
++        }
++    }
+     for (const auto & impl : spec->impls) {
+         std::string str_perf;
+         if (impl->gen_perf) {
+--- a/ggml/src/ggml-cpu/ggml-cpu.c
++++ b/ggml/src/ggml-cpu/ggml-cpu.c
+@@ -8,6 +8,9 @@
+ #include "ggml-cpu.h"
+ #include "ggml-impl.h"
+ #include "quants.h"
++#if defined(GGML_PTQ1_ENABLE_QIGEN)
++#include "ptq1-qigen.h"
++#endif
+ #include "ggml-threading.h"
+ #include "unary-ops.h"
+ #include "binary-ops.h"
+@@ -1246,23 +1249,40 @@
+ 
+     const size_t src1_col_stride = src1_cont || src1->type != vec_dot_type ? row_size : nb11;
+ 
++#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2) && \
++    (defined(GGML_PTQ1_ENABLE_PAIR_LUT) || defined(GGML_PTQ1_ENABLE_BATCH) || defined(GGML_PTQ1_ENABLE_QIGEN))
++    int qigen_mode=0;
++#if defined(GGML_PTQ1_ENABLE_QIGEN)
++    if (!params->use_ref && src0->type==GGML_TYPE_PTQ1_0 && ne11>=1 && ne11<=5) {
++        qigen_mode=ggml_ptq1_qigen_mode((int)(ir1_end-ir1_start));
++    }
++#endif
++    (void)qigen_mode;
++#endif
+     // Exact byte-plane pair LUT: table build is amortized across up to 16 rows.
+     // Opt-in, ordinary 2-D skinny matrices only; all other shapes keep fallback.
+-#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2) && defined(GGML_PTQ1_ENABLE_PAIR_LUT)
++#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2) && (defined(GGML_PTQ1_ENABLE_PAIR_LUT) || defined(GGML_PTQ1_ENABLE_QIGEN))
+     const int64_t pair_columns = ir1_end-ir1_start;
+-    if (!params->use_ref && src0->type == GGML_TYPE_PTQ1_0 &&
++    const bool default_lut=
++#if defined(GGML_PTQ1_ENABLE_PAIR_LUT)
++        qigen_mode==0;
++#else
++        false;
++#endif
++    if ((qigen_mode>=3 || default_lut) && !params->use_ref && src0->type == GGML_TYPE_PTQ1_0 &&
+         vec_dot_type == GGML_TYPE_Q8_0 && num_rows_per_vec_dot == 1 &&
+         ne02 == 1 && ne03 == 1 && ne12 == 1 && ne13 == 1 &&
+         ne00 >= 0 && ne00 <= INT_MAX && ne00 % 128 == 0 &&
+         nb00 == ggml_type_size(GGML_TYPE_PTQ1_0) &&
+         ne11 >= 1 && ne11 <= 5 && pair_columns >= 1 && pair_columns <= 5 &&
+         ir1_start >= 0 && ir1_end <= ne11 && nb0 == sizeof(float)) {
+-        for (int64_t r=ir0_start;r<ir0_end;r+=16) {
++        const int tile=qigen_mode==3?8:16;
++        for (int64_t r=ir0_start;r<ir0_end;r+=tile) {
+             ggml_ptq1_pair_lut_tile((int)ne00,
+                 (float *)((char *)dst->data+ir1_start*nb1)+r,nb1,
+                 (const char *)src0->data+r*nb01,nb01,
+                 (const char *)wdata+ir1_start*src1_col_stride,src1_col_stride,
+-                (int)MIN(16,ir0_end-r),(int)pair_columns);
++                (int)MIN(tile,ir0_end-r),(int)pair_columns);
+         }
+         return;
+     }
+@@ -1270,9 +1290,15 @@
+ 
+     // Opt-in tiny-batch verification: share packed-weight unpack across columns.
+     // Higher dimensions/broadcasts and reference requests keep the original path.
+-#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2) && defined(GGML_PTQ1_ENABLE_BATCH)
++#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2) && (defined(GGML_PTQ1_ENABLE_BATCH) || defined(GGML_PTQ1_ENABLE_QIGEN))
+     const int64_t ptq1_columns = ir1_end - ir1_start;
+-    if (!params->use_ref && src0->type == GGML_TYPE_PTQ1_0 &&
++    const bool default_batch=
++#if defined(GGML_PTQ1_ENABLE_BATCH)
++        qigen_mode==0;
++#else
++        false;
++#endif
++    if ((qigen_mode==2 || default_batch) && !params->use_ref && src0->type == GGML_TYPE_PTQ1_0 &&
+         vec_dot_type == GGML_TYPE_Q8_0 && num_rows_per_vec_dot == 1 &&
+         ne02 == 1 && ne03 == 1 && ne12 == 1 && ne13 == 1 &&
+         ne11 >= 2 && ne11 <= 5 && ptq1_columns >= 2 && ptq1_columns <= 5 &&
+--- a/ggml/src/ggml-cpu/quants.h
++++ b/ggml/src/ggml-cpu/quants.h
+@@ -46,7 +46,7 @@
+ void ggml_vec_dot_pq2_0_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc);
+ void ggml_vec_dot_ptq1_0_q8_0(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc);
+ 
+-#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2) && defined(GGML_PTQ1_ENABLE_BATCH)
++#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2) && (defined(GGML_PTQ1_ENABLE_BATCH) || defined(GGML_PTQ1_ENABLE_QIGEN))
+ void ggml_vec_dot_ptq1_0_q8_0_batch(int n, float * GGML_RESTRICT result, size_t result_stride,
+     const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy, size_t column_stride, int columns);
+ #endif
+@@ -119,7 +119,7 @@
+ #endif
+ 
+ 
+-#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2) && defined(GGML_PTQ1_ENABLE_PAIR_LUT)
++#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2) && (defined(GGML_PTQ1_ENABLE_PAIR_LUT) || defined(GGML_PTQ1_ENABLE_QIGEN))
+ void ggml_ptq1_pair_lut_tile(int n, float * result, size_t output_col_stride,
+     const void * vx, size_t weight_row_stride, const void * vy,
+     size_t activation_col_stride, int rows, int columns);
+--- a/ggml/src/ggml-cpu/arch/x86/ptq1-reuse.h
++++ b/ggml/src/ggml-cpu/arch/x86/ptq1-reuse.h
+@@ -2,7 +2,7 @@
+ // Included after ptq1-avx2.h in arch/x86/quants.c.
+ #ifndef GGML_PTQ1_REUSE_H
+ #define GGML_PTQ1_REUSE_H
+-#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2) && defined(GGML_PTQ1_ENABLE_BATCH)
++#if defined(__AVX2__) && !defined(GGML_PTQ1_DISABLE_AVX2) && (defined(GGML_PTQ1_ENABLE_BATCH) || defined(GGML_PTQ1_ENABLE_QIGEN))
+ void ggml_vec_dot_ptq1_0_q8_0_batch(
+         int n, float * GGML_RESTRICT result, size_t result_stride,
+         const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy,
+--- a/tools/server/server-context.cpp
++++ b/tools/server/server-context.cpp
+@@ -2919,6 +2919,8 @@
+                 const bool use_ckpt_dft = ctx_dft_seq_rm_type == COMMON_CONTEXT_SEQ_RM_TYPE_FULL;
+ 
+                 const int n_draft_max = slot.get_n_draft_max();
++                common_speculative_cycle_begin(spec.get(),slot.id,n_draft_max,
++                        slot.task->params.sampling.temp==0.0f,slot.prompt.n_tokens());
+ 
+                 if (n_draft_max > 0) {
+                     GGML_ASSERT(slot.can_speculate());
+@@ -3804,6 +3806,7 @@
+ 
+             if (!process_token(result, slot)) {
+                 // release slot because of stop condition
++                common_speculative_cycle_finish(spec.get(),slot.id,1);
+                 slot.print_timings();
+                 send_final_response(slot);
+                 slot.release();
+@@ -3811,6 +3814,7 @@
+                 return;
+             }
+ 
++            common_speculative_cycle_finish(spec.get(),slot.id,1);
+             slot.print_timings_tg();
+         });
+ 
+@@ -3930,6 +3934,7 @@
+                 slot.stats.n_gen += 1;
+ 
+                 if (!process_token(result, slot)) {
++                    common_speculative_cycle_finish(spec.get(),slot.id,(int)i+1);
+                     slot.print_timings();
+                     send_final_response(slot);
+                     slot.release();
+@@ -3938,6 +3943,7 @@
+                 }
+             }
+ 
++            common_speculative_cycle_finish(spec.get(),slot.id,(int)ids.size());
+             slot.print_timings_tg();
+ 
+             SLT_DBG(slot, "accepted %d/%d draft tokens, new n_tokens = %d\n", (int) n_accepted, (int) n_draft, slot.prompt.n_tokens());
+--- a/common/speculative.h
++++ b/common/speculative.h
+@@ -130,3 +130,9 @@
+ using common_speculative_init_result_ptr = std::unique_ptr<common_speculative_init_result>;
+ 
+ common_speculative_init_result_ptr common_speculative_init_from_params(common_params & params, llama_model * model_tgt, llama_context * ctx_tgt);
++
++// Experimental single-slot greedy source policy. Start before source/checkpoint
++// work; finish only at unique committed output, after rollback/replay/catch-up.
++// No-op unless LLAMA_SPEC_SOURCE_POLICY=1; cancellation is censored on begin().
++void common_speculative_cycle_begin(common_speculative *, llama_seq_id, int cap, bool greedy, int context);
++void common_speculative_cycle_finish(common_speculative *, llama_seq_id, int committed);
+--- /dev/null
++++ b/common/source-policy.h
+@@ -0,0 +1,104 @@
++// Source-local draft selection adaptation. Upstream llama.cpp MIT license.
++#pragma once
++#include <algorithm>
++#include <array>
++#include <cmath>
++#include <cstdint>
++#include <vector>
++
++// 0 = warm off, 1..4 = MTP, 5..8 = suffix chain of length arm-4.
++// Request-local and deterministic: never consumes target sampler randomness.
++struct common_source_policy {
++    struct stat { uint64_t tokens=0, us=0, samples=0; };
++    std::array<stat,9> stats{};
++    uint64_t cycles=0;
++    int arm=0;
++    int64_t started=0;
++    bool active=false;
++    int context_bucket=-1;
++    void reset() { *this=common_source_policy{}; }
++    int choose(int maximum, bool suffix) const {
++        const int cap=std::max(0,std::min(4,maximum));
++        if (!cap || stats[0].samples<2) return 0;
++        // One bounded exploration cycle per 16 completed cycles. Short outputs
++        // stay mostly ordinary; cooled-down losers get a deterministic recheck.
++        if (cycles%16==2) {
++            const int count=cap*(suffix?2:1);
++            const int probe=(int)((cycles/16)%(count+1));
++            if (probe==count) return 0; // periodically refresh the off baseline
++            return probe<cap ? probe+1 : probe-cap+5;
++        }
++        int best=0;
++        const double base=(double)stats[0].tokens/stats[0].us;
++        double best_score=base;
++        for (int a=1;a<9;++a) {
++            if ((a>4 && !suffix) || (a>4?a-4:a)>cap || stats[a].samples<2) continue;
++            const double rate=(double)stats[a].tokens/stats[a].us;
++            // Small bounded optimistic bonus, never enough to promote a
++            // measured arm slower than off. This is not a regret guarantee.
++            const double bonus=std::min(0.02,std::sqrt(std::log((double)cycles+1)/stats[a].samples)*0.005);
++            if (rate>base*1.05 && rate*(1+bonus)>best_score) { best=a; best_score=rate*(1+bonus); }
++        }
++        return best;
++    }
++    void begin(int cap, bool suffix, int64_t now, int bucket=-1) {
++        if (active) return; // full checkpoint replay belongs to the same cycle
++        if (bucket!=context_bucket) { reset(); context_bucket=bucket; }
++        arm=choose(cap,suffix); started=now; active=true;
++    }
++    bool finish(int committed, int64_t now) {
++        if (!active) return false;
++        active=false;
++        if (committed<=0 || now<=started) return false; // censored failure/cancel
++        auto & s=stats[arm];
++        s.tokens+=(uint64_t)committed; s.us+=(uint64_t)(now-started); ++s.samples; ++cycles;
++        return true;
++    }
++};
++
++// No persistent second context or suffix tree. Borrow the current committed
++// prompt and scan its last 8191 tokens plus id_last, in one request only.
++// Longest exact suffix, majority continuation, then conditional prefix counts.
++// Bounded scratch: <=8192 int32 tokens +8192 size_t positions +8192 int32 votes.
++// This is a scored chain adaptation, not the paper's tree implementation.
++template<class Token>
++static std::vector<Token> common_suffix_chain(const std::vector<Token> & prompt,
++        Token last, int maximum) {
++    maximum=std::max(0,std::min(4,maximum));
++    if (!maximum) return {};
++    const size_t retained=std::min<size_t>(8191,prompt.size());
++    std::vector<Token> h; h.reserve(retained+1);
++    h.insert(h.end(),prompt.end()-retained,prompt.end()); h.push_back(last);
++    const size_t n=h.size();
++    std::vector<size_t> matches;
++    matches.reserve(n);
++    // Minimum match is two exact tokens; require a historical continuation.
++    for (size_t width=std::min<size_t>(16,n);width>=2;--width) {
++        for (size_t end=width;end<n;++end) {
++            if (std::equal(h.begin()+end-width,h.begin()+end,h.end()-width)) matches.push_back(end);
++        }
++        if (!matches.empty()) break;
++    }
++    std::vector<Token> result, votes;
++    result.reserve(4); votes.reserve(n);
++    for (int depth=0;depth<maximum && !matches.empty();++depth) {
++        votes.clear();
++        for (auto pos:matches) if (pos+(size_t)depth<n) votes.push_back(h[pos+depth]);
++        if (votes.empty()) break;
++        std::sort(votes.begin(),votes.end());
++        Token best=votes.front(); size_t hits=0;
++        for (size_t i=0;i<votes.size();) {
++            size_t j=i+1; while (j<votes.size() && votes[j]==votes[i]) ++j;
++            if (j-i>hits) { hits=j-i; best=votes[i]; }
++            i=j;
++        }
++        // Ambiguous chains truncate, rather than spend a full verifier window.
++        // Include exhausted occurrences in denominator (no optimistic censoring).
++        if (hits*2<matches.size()) break;
++        result.push_back(best);
++        matches.erase(std::remove_if(matches.begin(),matches.end(),[&](size_t pos) {
++            return pos+(size_t)depth>=n || h[pos+depth]!=best;
++        }),matches.end());
++    }
++    return result;
++}
+--- /dev/null
++++ b/ggml/src/ggml-cpu/ptq1-qigen.h
+@@ -0,0 +1,17 @@
++// QIGen-inspired schedule selection for existing exact PTQ1 kernels.
++// Not QIGen's GPTQ format or a generated/retuned weight representation.
++#ifndef GGML_PTQ1_QIGEN_H
++#define GGML_PTQ1_QIGEN_H
++#include <stdlib.h>
++#include <string.h>
++static int ggml_ptq1_qigen_mode(int columns) {
++    const char * enabled=getenv("GGML_PTQ1_QIGEN");
++    if (!enabled || strcmp(enabled,"1") || columns<1 || columns>5) return 0;
++    const char * schedule=getenv("GGML_PTQ1_QIGEN_SCHEDULE");
++    // Exactly five choices, indexed by actual chunk width. Invalid settings
++    // fail closed to the pre-existing compile-time dispatch, never tune online.
++    if (!schedule || strlen(schedule)!=5) return 0;
++    for (int i=0;i<5;++i) if (schedule[i]<'0' || schedule[i]>'4') return 0;
++    return schedule[columns-1]-'0';
++}
++#endif

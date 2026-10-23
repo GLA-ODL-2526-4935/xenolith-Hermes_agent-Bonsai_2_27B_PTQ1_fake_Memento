@@ -141,3 +141,50 @@ Additional sources and decisions ([full review](docs/ADDITIONAL_INFERENCE_REVIEW
 These four papers were investigated, not newly ported in full. The local LUT
 engineering continues the prior bitnet.cpp/T-MAC source candidates; all earlier
 paper references and their implementation-status limitations still apply.
+
+
+## Draft selection and CPU papers — 22 October 2026
+
+[Review and implementation order](docs/FIVE_PAPER_SELECTION_REVIEW.md), checklist4D.
+The paper review records the design. An opt-in source adaptation now exists in
+[prism-source-selection](patches/prism-source-selection/README.md); it remains
+inactive and unvalidated in the full runtime.
+
+| Paper | Selection for this engine |
+| --- | --- |
+| [SuffixDecoding](https://arxiv.org/abs/2411.04975) | Priority: bounded scored suffix-chain draft source complementing the community MTP head; compare existing n-gram first. Full tree method deferred. |
+| [BanditSpec](https://arxiv.org/abs/2505.15141) | Priority: one cost-aware source/window selector including ordinary decoding. Replaces existing no-off window tuner; unequal-time adaptation needs its own validation. |
+| [FlashNorm](https://arxiv.org/abs/2407.09577) | Limited adjacent-fusion audit; existing RMSNorm+scale fusion already present. No automatic PTQ1 weight folding or epsilon/rounding-sensitive norm removal. |
+| [QIGen](https://arxiv.org/abs/2307.03738) | Select bounded cache/register-aware PTQ1 schedule tuning, not GPTQ format conversion or changed reduction order. |
+| [STree](https://arxiv.org/abs/2505.14969) | Exploratory: diagonal-SSM tree scan is not a drop-in Gated DeltaNet/Intel kernel. Preserve current recurrent rollback. |
+
+Without the new opt-in controller, the existing fixed-order n-gram/MTP dispatch
+is not cost-aware source selection.
+All-source processing and replay can incur costs outside the current draft timer;
+off and source-switch accounting must handle them explicitly. No second draft
+model, new training, model/head change or CPU/iGPU architecture change is selected.
+
+
+## Source arbitration and optional QIGen schedules — 23 October 2026
+
+[Implementation, switches and rollback](patches/prism-source-selection/README.md)
+requires exact v3 plus increment-v1. It adds request-local warm-off/MTP/suffix
+selection, full-cycle/replay/catch-up accounting and a bounded scored suffix-chain
+source. Temperature0 and one slot only; existing verification/state hooks remain.
+`LLAMA_SPEC_SOURCE_POLICY`, `LLAMA_SPEC_SUFFIX` and optional forced arm controls
+enable independent tests. Warm off still maintains the head; true head-disabled
+comparison remains necessary. The BanditSpec-inspired policy has no transferred
+round-based regret guarantee; the SuffixDecoding adaptation is not its full tree.
+
+QIGen-inspired scheduling has independent compile `GGML_PTQ1_ENABLE_QIGEN` and
+runtime `GGML_PTQ1_QIGEN` switches plus a five-column schedule. It compares existing
+exact dot/batch/LUT8/LUT16 paths without changing packed weights, four activation
+scales or FP order. Offline recommendations need measured correctness and repeated
+target timings; no online calibration or automatic activation. This is a bounded
+schedule implementation, not QIGen's GPTQ generator. See the five cited papers in
+the table above and package README for the precise attribution/deferred work.
+
+Seven offline tests and source/compiler checks pass; native tests are compiled
+only. Full runtime, numerical/model/action parity, memory and speed remain open.
+No native engine/model/GPU/WSL run, binary/profile change, or Intel Vulkan routing
+change occurred. Existing upstream license and all earlier paper references remain.

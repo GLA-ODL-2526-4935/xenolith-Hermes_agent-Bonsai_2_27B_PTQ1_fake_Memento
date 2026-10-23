@@ -1,0 +1,62 @@
+{
+  "patch_id": "intel-source-selection-v1",
+  "commit": "ff414120c343e6e6cb868013c99f1dde52b27e70",
+  "repository": "https://github.com/sudoingX/llama.cpp",
+  "requires": [
+    "intel-decode-v3",
+    "intel-decode-increment-v1"
+  ],
+  "patch_sha256": "3a14ff72006888cfd3825d0c25f7c110bb335e76573e660e1307b8229d401b5f",
+  "input_files": {
+    "common/arg.cpp": "f1e8d089b864aa72cd33c85f5ab0d1d213d7800b050f067b71ac58e21f8b765a",
+    "common/common.cpp": "8ee11faf1f1fdfe44b6330c3867b557654555258fbe62e922493f60afcaef570",
+    "common/common.h": "d998c2f0afe20e538129bbc6f904f44835a6e7c64478d2da245f82683774f015",
+    "common/mtp-cpu-policy.h": "29c02cff3a2a0ce7fdc0d65234b551bb63c2682756f605040140ca289d38fa91",
+    "common/speculative.cpp": "51bf2690e3fbc4a99a56b518c930f507feb6ea7fea1a88495076c0cb1a5eaf8a",
+    "ggml/src/ggml-cpu/ggml-cpu.c": "ecc4f8925d45936095305714b9b5618dd4ce050af8cddf1b4b3321c073a62a9d",
+    "ggml/src/ggml-cpu/quants.h": "14a9b6f2aaf02bca0bebada845d98cbefa458e48149929d155fd18a710a7673e",
+    "ggml/src/ggml-cpu/arch/x86/ptq1-avx2.h": "9757c0320ee17a1546948f5919bb158142d94c74ce40768bf70f198978b79873",
+    "ggml/src/ggml-cpu/arch/x86/ptq1-reuse.h": "808bd218cafcbef7e59a1d92ebd1f794d8618c840276b66ade2d125b1083c0fa",
+    "ggml/src/ggml-cpu/arch/x86/quants.c": "83562aed46a6ea878474040ea5f423edb35ad6bcbe53bd38dbcc111a37e78553",
+    "tools/server/server-context.cpp": "1617a77aec53242586fbb4e924a4f11aef29ee35ae395a5b9c7191e24edf57bd",
+    "ggml/src/ggml-cpu/arch/x86/ptq1-pair-lut.h": "4c87852023c9177fc90e5b121607703f68a6bd86e7ad8e07449e576a79ee09a0",
+    "common/sandwich-policy.h": "2b01d87a20e9f645224d31800b0c61752899e48b5f28d8d40d9ef211555bc35c",
+    "common/sandwich-impl.inc": "7c3c2cc470992670a844555b6a5f94c229c173bc8ff05f4698c07522a076be1c",
+    "common/mtp-verify-copy.h": "4a8beac2f93e8705c53bdc62c98fb67fe80c7133814c416534f6414776675661",
+    "common/speculative.h": "a3138e6477a5cceb0c15b41bc4bede768b460ea5fad74f745221911fa154ccc6"
+  },
+  "files": {
+    "common/speculative.cpp": {
+      "before_sha256": "51bf2690e3fbc4a99a56b518c930f507feb6ea7fea1a88495076c0cb1a5eaf8a",
+      "after_sha256": "61531a32ae094f8e3c88d2a3d89628cf34f0e3176f2c7153a5a011902b886e5a"
+    },
+    "ggml/src/ggml-cpu/ggml-cpu.c": {
+      "before_sha256": "ecc4f8925d45936095305714b9b5618dd4ce050af8cddf1b4b3321c073a62a9d",
+      "after_sha256": "2a82397e240bb2fbb4d83d09b5cdcd06ac1b981b3087c4e4586d2fe550fc30aa"
+    },
+    "ggml/src/ggml-cpu/quants.h": {
+      "before_sha256": "14a9b6f2aaf02bca0bebada845d98cbefa458e48149929d155fd18a710a7673e",
+      "after_sha256": "cf803f536822ab2af9c3972a0b7a1d59bae25196012d266bb2a5ccf91e3d7f39"
+    },
+    "ggml/src/ggml-cpu/arch/x86/ptq1-reuse.h": {
+      "before_sha256": "808bd218cafcbef7e59a1d92ebd1f794d8618c840276b66ade2d125b1083c0fa",
+      "after_sha256": "6e3d0b780104143d67945420a4240b8050ae4a9804d951471c9a2f0c33eb9910"
+    },
+    "tools/server/server-context.cpp": {
+      "before_sha256": "1617a77aec53242586fbb4e924a4f11aef29ee35ae395a5b9c7191e24edf57bd",
+      "after_sha256": "d1feff0a868bbbf6d435ba0d129ef03f5cef83a154d7a057f4a3cec36642c17e"
+    },
+    "common/speculative.h": {
+      "before_sha256": "a3138e6477a5cceb0c15b41bc4bede768b460ea5fad74f745221911fa154ccc6",
+      "after_sha256": "db24750886ac5404ae554205ad261ba7edd37dacf17374852c3a637d174f53a3"
+    },
+    "common/source-policy.h": {
+      "before_sha256": null,
+      "after_sha256": "89005d5c3ffc6337ec03ff0b85fc27ed92606271adb4c9d2cb3b14f09f3b4d81"
+    },
+    "ggml/src/ggml-cpu/ptq1-qigen.h": {
+      "before_sha256": null,
+      "after_sha256": "ccc0acbc3f941995cb0c8c8c4db526a244c5d15a4ff4c77e650c23646c34fec1"
+    }
+  }
+}
