@@ -162,6 +162,8 @@ class Store(MaintenanceMixin, StepRecoveryMixin):
                 raise PermissionError("Evidence absent or not approved for this record kind")
             sources = [{"id": key, **evidence[key]} for key in dict.fromkeys(evidence_ids)]
             candidate.update(id=uuid.uuid4().hex, created=now, session=session, evidence=sources)
+            if state.get("automatic_review"):
+                candidate["review_required"] = True
             duplicate = next((r for r in state["records"] if fingerprint(r) == fingerprint(candidate)), None)
             if duplicate:
                 return duplicate["id"]
@@ -180,7 +182,8 @@ class Store(MaintenanceMixin, StepRecoveryMixin):
                 return 0
             count = 0
             for record in state["records"]:
-                if record["bucket"] == "temporary":
+                from .review import can_promote
+                if record["bucket"] == "temporary" and can_promote(state, record):
                     record["bucket"] = "persistent"
                     record["consolidated"] = now
                     count += 1

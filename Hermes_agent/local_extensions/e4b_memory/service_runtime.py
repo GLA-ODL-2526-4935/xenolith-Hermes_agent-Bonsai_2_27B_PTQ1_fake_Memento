@@ -21,8 +21,13 @@ class Runtime:
             raise PermissionError("Initialize the service explicitly first")
         self.credentials = Credentials(self.root)
         self.store = Store(self.root / "memory")
+        from .review import configure_review
+        config = json.loads((self.root / "settings.json").read_text(encoding="utf-8"))
+        if config.get("automatic_review", False):
+            configure_review(self.store, True)
         self.surfaces = {}
         self.pending = {}
+        self.review_worker = None
 
     def dispatch(self, token, body):
         client, role = self.credentials.resolve(token)
@@ -117,8 +122,17 @@ class Runtime:
 
     def maintain(self):
         settings = json.loads((self.root / "settings.json").read_text(encoding="utf-8"))
+        from .review import configure_review
+        configure_review(self.store, settings.get("automatic_review", False))
         self.store.prepare_idle_checkpoints()
-        if settings["semantic_sort"]:
+        if settings.get("automatic_review"):
+            # Do not hold the serial HTTP server while the local model drafts.
+            if self.review_worker is None or not self.review_worker.is_alive():
+                from agent.memory_provider import spawn_context_thread
+                self.review_worker = spawn_context_thread(
+                    lambda: self._review_tick(settings), name="e4b-memory-review")
+                self.review_worker.start()
+        elif settings["semantic_sort"]:
             snapshot = self.store.maintenance_snapshot()
             if snapshot:
                 plan = request_sort(snapshot, settings["base_url"], settings["model"])
@@ -126,6 +140,15 @@ class Runtime:
         else:
             self.store.consolidate()
         return {"expired": self.store.expire(l0_days=settings["l0_days"], recovery_days=settings["recovery_days"])}
+
+    def _review_tick(self, settings):
+        import logging
+        from .review import run_review
+        try:
+            run_review(self.store, settings)
+            self.store.consolidate()
+        except (OSError, ValueError, PermissionError, TypeError, KeyError):
+            logging.getLogger(__name__).warning("Memory review refused; temporary records retained")
 
 
 CONTROLLER = {"begin": Runtime.begin, "finish": Runtime.finish, "capture": Runtime.capture,

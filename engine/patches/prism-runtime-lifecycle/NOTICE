@@ -1,0 +1,5 @@
+Runtime lifecycle delta, 2026-10-23.
+The masked MTP hidden-row capture fix is adapted from marfrit/arcint patch 0010
+at commit 0b0a95c2eff5fa5664437fcceeaca04453fd59d4, under Apache-2.0.
+See LICENSE.arcint and README.md for source attribution and adaptation scope.
+Existing llama.cpp/Prism code retains its original MIT notices.

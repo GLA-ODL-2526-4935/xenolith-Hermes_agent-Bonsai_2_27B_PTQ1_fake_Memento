@@ -5,6 +5,7 @@ import io
 import json
 import time
 
+from agent.privacy_policy import PRIVACY_GUIDANCE
 from local_extensions.e4b_http import read_json
 from .controlled_state import WorkingJournal, bounded, encoded
 
@@ -25,7 +26,7 @@ only by the controller. When all steps are attempted, finish or revise; never cl
 Once all necessary evidence has been read, finish directly; do not add an answer-construction step
 or reread the last file. action_history is chronological; later reports can supersede earlier state.
 Your per-step reasoning is discarded. Put operational dependencies into explicit plan goals.
-"""
+""" + "\n" + PRIVACY_GUIDANCE
 
 
 def object_reply(raw):

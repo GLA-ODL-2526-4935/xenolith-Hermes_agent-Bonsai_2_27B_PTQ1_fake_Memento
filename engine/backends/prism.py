@@ -19,7 +19,9 @@ FIELDS = {'schema_version', 'id', 'backend', 'target_os', 'device', 'context', '
           'host', 'port', 'status', 'runtime_requirement'}
 CPU_OPTIONS = {'threads_batch': None, 'cpu_mask': '', 'cpu_mask_batch': '',
                'poll': 0, 'poll_batch': 0, 'prefix_cache': False,
-               'cache_ram_mib': 0, 'adaptive_mtp': False, 'draft_backend_sampling': True}
+               'cache_ram_mib': 0, 'adaptive_mtp': False, 'draft_backend_sampling': True,
+               'source_policy': False, 'suffix_drafting': False, 'policy_frozen': False,
+               'policy_identity': '', 'policy_input': '', 'policy_output': ''}
 
 
 def settings(c):
@@ -62,7 +64,8 @@ def validate(c):
         raise ValueError('Invalid batch or output/context relationship')
     if type(c['threads_batch']) is not int or not 1 <= c['threads_batch'] <= 64:
         raise ValueError('Invalid batch thread count')
-    for field in ('prefix_cache', 'adaptive_mtp', 'draft_backend_sampling'):
+    for field in ('prefix_cache', 'adaptive_mtp', 'draft_backend_sampling',
+                  'source_policy', 'suffix_drafting', 'policy_frozen'):
         if type(c[field]) is not bool:
             raise ValueError('Expected boolean ' + field)
     for field in ('poll', 'poll_batch'):
@@ -83,6 +86,19 @@ def validate(c):
         raise ValueError('Adaptive CPU MTP requires CPU, MTP enabled and zero threshold')
     if c['adaptive_mtp'] and 'cpu-mtp-v1' not in c['runtime_requirement']:
         raise ValueError('Adaptive mode requires an explicitly patched cpu-mtp-v1 runtime')
+    for field in ('policy_identity', 'policy_input', 'policy_output'):
+        if not isinstance(c[field], str) or '\x00' in c[field]:
+            raise ValueError('Invalid selector path')
+    if c['source_policy']:
+        if not c['mtp_tokens'] or c['adaptive_mtp'] or 'intel-source-profile-v2' not in c['runtime_requirement']:
+            raise ValueError('Source policy requires MTP and the portable patched runtime; disable old adaptive MTP')
+        if any(c[f] for f in ('policy_identity', 'policy_input', 'policy_output')):
+            if not c['policy_identity'] or not (c['policy_input'] or c['policy_output']):
+                raise ValueError('Profile IO requires identity and input/output')
+        if c['policy_frozen'] and (not c['policy_input'] or c['policy_output']):
+            raise ValueError('Frozen policy requires input only')
+    elif any(c[f] for f in ('suffix_drafting', 'policy_frozen', 'policy_identity', 'policy_input', 'policy_output')):
+        raise ValueError('Selector options require source_policy')
     p = c['mtp_probability']
     if type(p) not in (int, float) or not 0 <= p <= 1:
         raise ValueError('Invalid draft probability')
@@ -143,9 +159,16 @@ def make_plan(c, engine, model):
         cmd += ['--ctx-checkpoints', '2', '--no-cache-idle-slots']
     if c['adaptive_mtp']:
         cmd += ['--spec-draft-adaptive']
-    return {'mode': 'dry-run', 'profile': c['id'], 'status': c['status'],
+    environment = {'LLAMA_SPEC_SOURCE_POLICY': '0'}
+    if c['source_policy']:
+        environment = {'LLAMA_SPEC_SOURCE_POLICY': '1', 'LLAMA_SPEC_SUFFIX': str(int(c['suffix_drafting']))}
+        for field, key in [('policy_identity', 'LLAMA_SPEC_IDENTITY'), ('policy_input', 'LLAMA_SPEC_PROFILE_IN'),
+                           ('policy_output', 'LLAMA_SPEC_PROFILE_OUT')]:
+            if c[field]: environment[key] = c[field]
+        if c['policy_frozen']: environment['LLAMA_SPEC_PROFILE_FROZEN'] = '1'
+    plan = {'mode': 'dry-run', 'profile': c['id'], 'status': c['status'],
             'target_os': 'Linux', 'argv': cmd,
-            'environment': {},
+            'environment': environment,
             'transport_options': {'reuse_prefix': c['prefix_cache'], 'keep_alive': True},
             'endpoint': f"http://127.0.0.1:{c['port']}/v1",
             'request_defaults': request_defaults(c), 'required_model_sha256': MODEL_SHA256,
@@ -153,6 +176,13 @@ def make_plan(c, engine, model):
             'capabilities': {'native_xeno_graph': False, 'native_xeno_wire_protocol': False,
                              'native_xeno_snapshots': False, 'vision_validated': False,
                              'physical_kv_eviction': False, 'target_runtime_validated': False}}
+    if c['source_policy']:
+        try:
+            from . import source_profiles as profiles
+        except ImportError:
+            import source_profiles as profiles
+        plan['selector_settings'] = profiles.settings_for_plan(c, plan)
+    return plan
 
 
 def available_ram():
@@ -187,13 +217,27 @@ def serve(plan, c):
     if available_ram() < threshold:
         raise RuntimeError('Insufficient available RAM before launch')
     verify_files(plan['argv'][0], plan['argv'][2])
+    c = settings(c)
+    if c['source_policy'] and c['policy_identity']:
+        try:
+            from . import source_profiles as profiles
+        except ImportError:
+            import source_profiles as profiles
+        expected = profiles.identity(profiles.read(c['policy_identity']))
+        if any(expected[k] != MODEL_SHA256 for k in
+               ('weights_sha256', 'tokenizer_artifact_sha256', 'head_artifact_sha256')):
+            raise ValueError('Selector model/tokenizer/head identity mismatch')
+        profiles.check_runtime(expected, plan['argv'][0], profiles.settings_for_plan(c, plan))
+        if c['policy_input']:
+            profiles.validate(profiles.read(c['policy_input']), expected)
     # An occupied endpoint is another process, never something to attach to or kill.
     with socket.socket() as sock:
         if sock.connect_ex((c['host'], c['port'])) == 0:
             raise RuntimeError('Endpoint occupied; refusing duplicate server')
     env = os.environ.copy()
     # Host state must not silently replace pinned model/device/context choices.
-    env = {k: v for k, v in env.items() if not k.startswith('LLAMA_ARG_')}
+    env = {k: v for k, v in env.items() if not k.startswith(('LLAMA_ARG_', 'LLAMA_SPEC_SOURCE_', 'LLAMA_SPEC_PROFILE_'))
+           and k not in {'LLAMA_SPEC_IDENTITY', 'LLAMA_SPEC_SUFFIX'}}
     env.update(plan['environment'])
     child = None
     prior = {}

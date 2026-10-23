@@ -1,5 +1,12 @@
 # E4B single-user memory
 
+Opt-in automatic draft generation and same-layer conflict review now have an
+owner-accepted proposal workflow; see [AUTOMATIC_REVIEW.md](AUTOMATIC_REVIEW.md).
+Optional owner-only Discord DM acceptance is described in
+[DISCORD_REVIEW.md](DISCORD_REVIEW.md); no bot is connected or automatically started.
+It keeps temporary L0–L3, never auto-accepts model text, and does not enable a
+model/profile. The historical workflow below remains the default when disabled.
+
 The active project plan is v4. Controller-only source-linked step recovery is now
 available separately from curated memory; see `../../STEP_RECOVERY_STATUS.md` for
 the payload, limits, owner `save-step` command and unfinished integration gates.

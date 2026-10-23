@@ -33,13 +33,15 @@ def network_policy(event, args):
 
 
 def profile_config(base_url, model, *, semantic_sort=False, memory_service_url=None, shadow_capture=False,
-                   research_validator=True):
+                   research_validator=True, automatic_review=False):
     from .research_profile import ResearchValidator
     ResearchValidator(research_validator)
     if not isinstance(semantic_sort, bool):
         raise ValueError("semantic_sort must be boolean")
     if type(shadow_capture) is not bool:
         raise ValueError("shadow_capture must be boolean")
+    if type(automatic_review) is not bool:
+        raise ValueError("automatic_review must be boolean")
     endpoint = local_endpoint(base_url)
     text(model, 200)
     base = endpoint.removesuffix("/chat/completions")
@@ -54,18 +56,21 @@ def profile_config(base_url, model, *, semantic_sort=False, memory_service_url=N
                 "compression", "vision", "title", "session_search", "curator", "review", "memory")}}
     if shadow_capture:
         config["memory"]["e4b_memory"]["shadow_capture"] = True
+    if automatic_review:
+        config["memory"]["e4b_memory"]["automatic_review"] = True
     if memory_service_url is not None:
         from .remote import validate_endpoint
-        if semantic_sort:
-            raise ValueError("Configure semantic sorting on the service owner side, not the agent profile")
+        if semantic_sort or automatic_review:
+            raise ValueError("Configure model maintenance on the service owner side, not the agent profile")
         config["memory"]["e4b_memory"].update(backend="service", service_url=validate_endpoint(memory_service_url))
     return config
 
 
 def create_profile(destination, base_url, model, *, semantic_sort=False, memory_service_url=None, shadow_capture=False,
-                   research_validator=True):
+                   research_validator=True, automatic_review=False):
     config = profile_config(base_url, model, semantic_sort=semantic_sort, memory_service_url=memory_service_url,
-                            shadow_capture=shadow_capture, research_validator=research_validator)
+                            shadow_capture=shadow_capture, research_validator=research_validator,
+                            automatic_review=automatic_review)
     destination = Path(destination).resolve()
     source = Path(__file__).parent.resolve()
     if destination == source or source in destination.parents:
@@ -97,7 +102,7 @@ def run_profile(profile):
     memory = actual.get("memory", {}).get("e4b_memory", {})
     expected = profile_config(model["base_url"], model["default"], semantic_sort=memory.get("semantic_sort", False),
                               memory_service_url=memory.get("service_url"), shadow_capture=memory.get("shadow_capture", False),
-                              research_validator=validator.enabled)
+                              research_validator=validator.enabled, automatic_review=memory.get("automatic_review", False))
     if "research_only" not in actual:  # Existing generated memory-only profiles keep working.
         expected.pop("research_only")
     if actual != expected:
@@ -141,6 +146,7 @@ def main():
     init.add_argument("--model", required=True)
     init.add_argument("--semantic-sort", action="store_true", help="Use the same local model for idle layer classification")
     init.add_argument("--shadow-capture", action="store_true", help="Record bounded visible-text checkpoints; no context replacement")
+    init.add_argument("--automatic-review", action="store_true", help="Draft memory and review conflicts at idle; manual acceptance required")
     init.add_argument("--memory-service-url", help="Opt into remote storage; credentials are scoped secrets, not CLI arguments")
     init.add_argument("--no-research-validator", action="store_true",
                       help="Disable only the extra profile validator; memory-only launcher restrictions remain")
@@ -150,7 +156,7 @@ def main():
     if args.action == "init":
         print(create_profile(args.path, args.base_url, args.model, semantic_sort=args.semantic_sort,
                               memory_service_url=args.memory_service_url, shadow_capture=args.shadow_capture,
-                              research_validator=not args.no_research_validator))
+                              research_validator=not args.no_research_validator, automatic_review=args.automatic_review))
     else:
         run_profile(args.path)
 

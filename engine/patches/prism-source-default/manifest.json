@@ -1,0 +1,39 @@
+{
+  "patch_id": "intel-source-default-v3",
+  "commit": "ff414120c343e6e6cb868013c99f1dde52b27e70",
+  "requires": [
+    "intel-source-profile-v2"
+  ],
+  "input_files": {
+    "ggml/src/ggml-cpu/arch/x86/ptq1-avx2.h": "9757c0320ee17a1546948f5919bb158142d94c74ce40768bf70f198978b79873",
+    "common/sandwich-policy.h": "2b01d87a20e9f645224d31800b0c61752899e48b5f28d8d40d9ef211555bc35c",
+    "common/mtp-verify-copy.h": "4a8beac2f93e8705c53bdc62c98fb67fe80c7133814c416534f6414776675661",
+    "common/source-policy.h": "f8fb67cae5e4b08218cfc446b51143eac5bdaca1439a526d4f23d374d8a16620",
+    "common/speculative.h": "37e93203b5f0b8893b413ab764d717db1634b4d2299511f3fa8f0ae643c99dc4",
+    "common/source-profile.h": "db1891edfce5734094912a75e51ea15619f3b8f72ab0ae4fc416007d35f3533d",
+    "common/common.h": "d998c2f0afe20e538129bbc6f904f44835a6e7c64478d2da245f82683774f015",
+    "common/sandwich-impl.inc": "7c3c2cc470992670a844555b6a5f94c229c173bc8ff05f4698c07522a076be1c",
+    "ggml/src/ggml-cpu/ptq1-qigen.h": "ccc0acbc3f941995cb0c8c8c4db526a244c5d15a4ff4c77e650c23646c34fec1",
+    "common/arg.cpp": "f1e8d089b864aa72cd33c85f5ab0d1d213d7800b050f067b71ac58e21f8b765a",
+    "ggml/src/ggml-cpu/quants.h": "cf803f536822ab2af9c3972a0b7a1d59bae25196012d266bb2a5ccf91e3d7f39",
+    "ggml/src/ggml-cpu/arch/x86/quants.c": "83562aed46a6ea878474040ea5f423edb35ad6bcbe53bd38dbcc111a37e78553",
+    "common/common.cpp": "8ee11faf1f1fdfe44b6330c3867b557654555258fbe62e922493f60afcaef570",
+    "ggml/src/ggml-cpu/arch/x86/ptq1-reuse.h": "6e3d0b780104143d67945420a4240b8050ae4a9804d951471c9a2f0c33eb9910",
+    "ggml/src/ggml-cpu/ggml-cpu.c": "2a82397e240bb2fbb4d83d09b5cdcd06ac1b981b3087c4e4586d2fe550fc30aa",
+    "common/speculative.cpp": "f2ef0132fae693c7ea77ba75577ef33c52919a3eafb5e44ad3ab69e3f38b8626",
+    "tools/server/server-context.cpp": "93e860f6236b99de5a0ee5be248bdb62c0344ebf117267107d90edf8b5e908d4",
+    "ggml/src/ggml-cpu/arch/x86/ptq1-pair-lut.h": "4c87852023c9177fc90e5b121607703f68a6bd86e7ad8e07449e576a79ee09a0",
+    "common/mtp-cpu-policy.h": "29c02cff3a2a0ce7fdc0d65234b551bb63c2682756f605040140ca289d38fa91"
+  },
+  "files": {
+    "common/source-profile.h": {
+      "before_sha256": "db1891edfce5734094912a75e51ea15619f3b8f72ab0ae4fc416007d35f3533d",
+      "after_sha256": "7a85bfafc03f55ee5caa0e4bd624931d6de3c31c4d5b031dd2dd93c3f4333107"
+    },
+    "common/speculative.cpp": {
+      "before_sha256": "f2ef0132fae693c7ea77ba75577ef33c52919a3eafb5e44ad3ab69e3f38b8626",
+      "after_sha256": "24dd181fdb31bdfd2af012e42d78553076ad55fbdf948ecbf52ede7901adff82"
+    }
+  },
+  "patch_sha256": "744864ea88e3d17ac9b31cb974eb86bed58612291655fe369b1df67fd6da2aff"
+}

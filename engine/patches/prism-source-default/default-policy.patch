@@ -1,0 +1,34 @@
+--- a/common/source-profile.h
++++ b/common/source-profile.h
+@@ -93,6 +93,7 @@
+         }
+         return data;
+     }
++    common_source_profiles()=default; // process-local learning; file IO remains explicit
+     common_source_profiles(const std::string & expected,const std::string & input,const std::string & destination,bool freeze=false): frozen(freeze) {
+         identity=read(expected);validate_identity(identity);
+         try {
+--- a/common/speculative.cpp
++++ b/common/speculative.cpp
+@@ -3404,9 +3404,11 @@
+     }
+ 
+     const char * source_env = std::getenv("LLAMA_SPEC_SOURCE_POLICY");
+-    const bool source_policy = source_env && std::strcmp(source_env,"1")==0;
++    const bool source_eligible=n_seq==1 && configs.size()==1 && configs[0].type==COMMON_SPECULATIVE_TYPE_DRAFT_MTP &&
++        params.draft.n_max>=1 && params.draft.n_max<=4 && params.draft.n_min<=1;
++    const bool source_policy = source_env ? std::strcmp(source_env,"1")==0 : source_eligible;
+     const char * suffix_env = std::getenv("LLAMA_SPEC_SUFFIX");
+-    const bool suffix_enabled = suffix_env && std::strcmp(suffix_env,"1")==0;
++    const bool suffix_enabled = !suffix_env || std::strcmp(suffix_env,"1")==0;
+     const char * force_env = std::getenv("LLAMA_SPEC_SOURCE_FORCE");
+     int source_force=-1;
+     if (source_policy && force_env) {
+@@ -3525,6 +3527,7 @@
+         if (frozen && (input.empty() || !output.empty())) throw std::runtime_error("frozen profile requires input only");
+         profiles=std::make_unique<common_source_profiles>(identity,input,output,frozen);
+     }
++    if (source_policy && !profiles) profiles=std::make_unique<common_source_profiles>();
+     auto * result = new common_speculative {
+         /* .dparams   = */ common_speculative_draft_params_vec(n_seq),
+         /* .impls     = */ std::move(impls),

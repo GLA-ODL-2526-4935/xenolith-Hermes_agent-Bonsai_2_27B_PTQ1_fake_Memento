@@ -63,7 +63,7 @@ class BackendContract(unittest.TestCase):
                             ('--spec-draft-threads-batch', '8')]:
             self.assertEqual(cmd[cmd.index(flag) + 1], value)
         self.assertIn('--no-spec-draft-backend-sampling', cmd)
-        self.assertEqual(plan['environment'], {})
+        self.assertEqual(plan['environment'], {'LLAMA_SPEC_SOURCE_POLICY': '0'})
         self.assertEqual(cmd[cmd.index('-ngl') + 1], '0')
 
     def test_prefix_reuse_is_explicit_and_bounded(self):

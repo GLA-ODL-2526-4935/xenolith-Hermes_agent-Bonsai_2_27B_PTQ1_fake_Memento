@@ -38,6 +38,8 @@ class E4BMemoryProvider(MemoryProvider):
         from pathlib import Path
         self.store = Store(Path(kwargs["hermes_home"]) / "e4b_memory")
         self.settings = load_settings()
+        from .review import configure_review
+        configure_review(self.store, self.settings.get("automatic_review", False))
         self.shadow_capture = self.settings["shadow_capture"]
         self.session = session_id
         self.surface = Surface(self.store, session_id)
@@ -122,8 +124,13 @@ class E4BMemoryProvider(MemoryProvider):
                 logger.exception("E4B memory consolidation failed; temporary records retained")
 
     def maintain(self):
+        from .review import configure_review, run_review
+        configure_review(self.store, self.settings.get("automatic_review", False))
         self.store.prepare_idle_checkpoints()
-        if self.settings["semantic_sort"]:
+        if self.settings.get("automatic_review"):
+            run_review(self.store, self.settings)
+            self.store.consolidate()
+        elif self.settings["semantic_sort"]:
             snapshot = self.store.maintenance_snapshot()
             if snapshot:
                 plan = request_sort(snapshot, self.settings["base_url"], self.settings["model"])
@@ -167,14 +174,20 @@ def load_settings():
     shadow = memory.get("shadow_capture", False)
     if type(shadow) is not bool:
         raise ValueError("shadow_capture must be boolean")
-    settings = {"semantic_sort": enabled, "shadow_capture": shadow, "l0_days": memory.get("l0_days", 30),
+    automatic = memory.get("automatic_review", False)
+    if type(automatic) is not bool:
+        raise ValueError("automatic_review must be boolean")
+    from .review_model import validate_timeout
+    timeout = validate_timeout(memory.get("review_timeout_seconds", 120))
+    settings = {"semantic_sort": enabled, "shadow_capture": shadow, "automatic_review": automatic,
+                "review_timeout_seconds": timeout, "l0_days": memory.get("l0_days", 30),
                 "recovery_days": memory.get("recovery_days", 7),
                 "base_url": model.get("base_url", ""), "model": model.get("default", "")}
     for key, upper in (("l0_days", 3650), ("recovery_days", 365)):
         value = settings[key]
         if type(value) is not int or not 1 <= value <= upper:
             raise ValueError("Invalid memory retention interval")
-    if enabled:
+    if enabled or automatic:
         if model.get("provider") != "custom" or not settings["model"]:
             raise ValueError("Semantic sorting requires an explicitly configured custom local main model")
         local_endpoint(settings["base_url"])

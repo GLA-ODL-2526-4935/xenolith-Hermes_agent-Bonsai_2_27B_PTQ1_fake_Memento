@@ -1,0 +1,279 @@
+{
+  "scope": "model-free policy/hooks executed; full edited allocator/backend/CPU/models compile only",
+  "results": [
+    {
+      "name": "policy-compile",
+      "returncode": 0,
+      "seconds": 0.516,
+      "command": [
+        "g++",
+        "-std=c++17",
+        "-O2",
+        "-ffp-contract=off",
+        "-fno-fast-math",
+        "-pthread",
+        "C:\\Users\\Bion\\My_github_things\\xenolith+Hermes_agent+Bonsai_2_27B_PTQ1_fake_Memento\\engine\\patches\\prism-runtime-lifecycle\\test-policy.cpp",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src",
+        "-o",
+        "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\runtime-lifecycle\\portable-tests\\policy.exe"
+      ]
+    },
+    {
+      "name": "policy",
+      "returncode": 0,
+      "seconds": 0.172,
+      "command": [
+        "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\runtime-lifecycle\\portable-tests\\policy.exe"
+      ]
+    },
+    {
+      "name": "masked-graph-compile",
+      "returncode": 0,
+      "seconds": 0.406,
+      "command": [
+        "g++",
+        "-std=c++17",
+        "-O2",
+        "-ffp-contract=off",
+        "-fno-fast-math",
+        "-pthread",
+        "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\runtime-lifecycle\\portable-tests\\masked-graph.cpp",
+        "-o",
+        "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\runtime-lifecycle\\portable-tests\\masked-graph.exe"
+      ]
+    },
+    {
+      "name": "masked-graph",
+      "returncode": 0,
+      "seconds": 0.063,
+      "command": [
+        "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\runtime-lifecycle\\portable-tests\\masked-graph.exe"
+      ]
+    },
+    {
+      "name": "actual-sampler-compile",
+      "returncode": 0,
+      "seconds": 0.687,
+      "command": [
+        "g++",
+        "-std=c++17",
+        "-O2",
+        "-ffp-contract=off",
+        "-fno-fast-math",
+        "-pthread",
+        "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\runtime-lifecycle\\portable-tests\\actual-sampler.cpp",
+        "-o",
+        "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\runtime-lifecycle\\portable-tests\\actual-sampler.exe"
+      ]
+    },
+    {
+      "name": "actual-sampler",
+      "returncode": 0,
+      "seconds": 0.063,
+      "command": [
+        "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\runtime-lifecycle\\portable-tests\\actual-sampler.exe"
+      ]
+    },
+    {
+      "name": "actual-budget-preflight-compile",
+      "returncode": 0,
+      "seconds": 0.266,
+      "command": [
+        "g++",
+        "-std=c++17",
+        "-O2",
+        "-ffp-contract=off",
+        "-fno-fast-math",
+        "-pthread",
+        "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\runtime-lifecycle\\portable-tests\\actual-budget-preflight.cpp",
+        "-o",
+        "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\runtime-lifecycle\\portable-tests\\actual-budget-preflight.exe"
+      ]
+    },
+    {
+      "name": "actual-budget-preflight",
+      "returncode": 0,
+      "seconds": 0.687,
+      "command": [
+        "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\runtime-lifecycle\\portable-tests\\actual-budget-preflight.exe"
+      ]
+    },
+    {
+      "name": "actual-input-wait-compile",
+      "returncode": 0,
+      "seconds": 0.204,
+      "command": [
+        "g++",
+        "-std=c++17",
+        "-O2",
+        "-ffp-contract=off",
+        "-fno-fast-math",
+        "-pthread",
+        "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\runtime-lifecycle\\portable-tests\\actual-input-wait.cpp",
+        "-o",
+        "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\runtime-lifecycle\\portable-tests\\actual-input-wait.exe"
+      ]
+    },
+    {
+      "name": "actual-input-wait",
+      "returncode": 0,
+      "seconds": 0.046,
+      "command": [
+        "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\runtime-lifecycle\\portable-tests\\actual-input-wait.exe"
+      ]
+    },
+    {
+      "name": "full-allocator-compile",
+      "returncode": 0,
+      "seconds": 0.188,
+      "command": [
+        "gcc",
+        "-std=c11",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\include",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src",
+        "-c",
+        "C:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src\\ggml-alloc.c",
+        "-o",
+        "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\runtime-lifecycle\\portable-tests\\alloc.o"
+      ]
+    },
+    {
+      "name": "full-backend-compile",
+      "returncode": 0,
+      "seconds": 1.281,
+      "command": [
+        "g++",
+        "-std=c++17",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\include",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src",
+        "-c",
+        "C:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src\\ggml-backend.cpp",
+        "-o",
+        "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\runtime-lifecycle\\portable-tests\\backend.o"
+      ]
+    },
+    {
+      "name": "full-qwen35-compile",
+      "returncode": 0,
+      "seconds": 0.938,
+      "command": [
+        "g++",
+        "-std=c++17",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\include",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\include",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\src",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\src\\models",
+        "-c",
+        "C:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\src\\models\\qwen35.cpp",
+        "-o",
+        "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\runtime-lifecycle\\portable-tests\\qwen35.o"
+      ]
+    },
+    {
+      "name": "full-qwen35moe-compile",
+      "returncode": 0,
+      "seconds": 1.047,
+      "command": [
+        "g++",
+        "-std=c++17",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\include",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\include",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\src",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\src\\models",
+        "-c",
+        "C:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\src\\models\\qwen35moe.cpp",
+        "-o",
+        "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\runtime-lifecycle\\portable-tests\\qwen35moe.o"
+      ]
+    },
+    {
+      "name": "full-cpu-off-compile",
+      "returncode": 0,
+      "seconds": 0.812,
+      "command": [
+        "gcc",
+        "-std=gnu11",
+        "-D_GNU_SOURCE",
+        "-D_WIN32_WINNT=0x0601",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\include",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src\\ggml-cpu",
+        "-c",
+        "C:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src\\ggml-cpu\\ggml-cpu.c",
+        "-o",
+        "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\runtime-lifecycle\\portable-tests\\cpu-off.o"
+      ]
+    },
+    {
+      "name": "full-cpu-on-compile",
+      "returncode": 0,
+      "seconds": 0.547,
+      "command": [
+        "gcc",
+        "-std=gnu11",
+        "-D_GNU_SOURCE",
+        "-D_WIN32_WINNT=0x0601",
+        "-DGGML_CPU_CACHELINE_SCHEDULE",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\include",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src\\ggml-cpu",
+        "-c",
+        "C:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src\\ggml-cpu\\ggml-cpu.c",
+        "-o",
+        "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\runtime-lifecycle\\portable-tests\\cpu-on.o"
+      ]
+    },
+    {
+      "name": "full-cpu-qigen-compile",
+      "returncode": 0,
+      "seconds": 0.594,
+      "command": [
+        "gcc",
+        "-std=gnu11",
+        "-D_GNU_SOURCE",
+        "-D_WIN32_WINNT=0x0601",
+        "-DGGML_CPU_CACHELINE_SCHEDULE",
+        "-DGGML_PTQ1_ENABLE_QIGEN",
+        "-mavx2",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\include",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src\\ggml-cpu",
+        "-c",
+        "C:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src\\ggml-cpu\\ggml-cpu.c",
+        "-o",
+        "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\runtime-lifecycle\\portable-tests\\cpu-qigen.o"
+      ]
+    },
+    {
+      "name": "full-server-compile",
+      "returncode": 0,
+      "seconds": 11.765,
+      "command": [
+        "g++",
+        "-std=c++17",
+        "-Wa,-mbig-obj",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\include",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\ggml\\src",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\include",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\tools\\server",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\tools\\mtmd",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\common",
+        "-IC:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\vendor",
+        "-c",
+        "C:\\Users\\Bion\\My_github_things\\gemma-4-E2b-Memento\\engines\\llama.cpp\\prism-cost-aware-source\\tools\\server\\server-context.cpp",
+        "-o",
+        "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\runtime-lifecycle\\portable-tests\\server.o"
+      ]
+    }
+  ]
+}

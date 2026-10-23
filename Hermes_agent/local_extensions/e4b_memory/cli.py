@@ -41,6 +41,11 @@ def register_cli(subparser):
     delete.add_argument("id")
     commands.add_parser("consolidate", help="Promote records if idle for three hours")
     commands.add_parser("requests", help="Inspect unverified checkpoint candidates")
+    commands.add_parser("review-memory", help="Inspect automatic drafts/conflict proposals, sources and errors")
+    commands.add_parser("retry-memory-review", help="Owner permits another attempt after failed background review")
+    for name in ("accept-memory", "reject-memory"):
+        child = commands.add_parser(name, help="Owner decision on the exact inspected memory proposal")
+        child.add_argument("id")
     commands.add_parser("tasks", help="Inspect separate unfinished-task recovery state")
     step = commands.add_parser("save-step", help="Controller saves visible source-linked recovery, never approved memory")
     step.add_argument("session")
@@ -162,3 +167,19 @@ def _offline_commands():
 
 
 COMMANDS.update(_offline_commands())
+
+
+def _review_commands():
+    from .review import decide, retry_failed
+    return {
+        "review-memory": lambda store, args: {
+            "proposals": store.snapshot().get("memory_proposals", {}),
+            "error": store.snapshot().get("memory_review_error"),
+            "notice": "Unverified proposals. Acceptance reviews the proposed text AND supporting evidence."},
+        "accept-memory": lambda store, args: decide(store, args.id, True),
+        "reject-memory": lambda store, args: decide(store, args.id, False),
+        "retry-memory-review": lambda store, args: retry_failed(store),
+    }
+
+
+COMMANDS.update(_review_commands())

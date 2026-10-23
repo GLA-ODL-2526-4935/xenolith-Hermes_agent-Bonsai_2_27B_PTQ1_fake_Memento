@@ -184,3 +184,28 @@ Engine source update (23 October 2026): [optional source-selection/QIGen package
 adds bounded suffix/MTP/warm-off selection and separate PTQ1 schedule switches.
 Inactive, source/compiler checked; native/model correctness and speed remain to
 be measured. Requires exact v3 plus increment-v1; no live profile was changed.
+
+
+## Persistent draft-source learning - 23 October 2026
+
+The [portable source profile package](engine/patches/prism-source-profile/README.md) adds request-to-request cost learning,
+profile export/import, frozen held-out evaluation and 24 Hermes-style workflows
+(72 requests). It is applied in a separate pinned Prism source checkout and
+supported by Xenolith's external Prism adapter; no installed binary is replaced.
+The native Gemma graph does not consume this profile. Hardware/build/settings
+mismatches require fresh calibration, rather than importing foreign timing priors.
+
+This extends ideas from [BanditSpec](https://arxiv.org/abs/2505.15141) and
+[SuffixDecoding](https://arxiv.org/abs/2411.04975), using a bounded deterministic
+rate selector and prompt-local suffix chains, not the full published algorithms.
+30 Python contracts pass and full speculation/server sources compile in syntax
+checks. Native/runtime/model parity and Intel speed tests remain unrun. No learned
+performance numbers or acceleration are claimed. Existing launch profiles remain
+disabled/unmodified; the target RAM-reserve issue remains a separate open item.
+
+
+User-authorized runtime update: [default-on source selector](engine/patches/prism-source-default/README.md) retains
+cost learning across eligible MTP requests without an enabling env switch.
+The benchmark supplies explicit disk profile paths for restart persistence.
+Runtime identities now include adjacent shared libraries. No Intel speed claim
+is implied by a Windows/NVIDIA benchmark.

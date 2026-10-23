@@ -13,12 +13,17 @@ from .sorting import local_endpoint
 
 def settings(value):
     keys = {"semantic_sort", "l0_days", "recovery_days", "base_url", "model"}
-    if not isinstance(value, dict) or set(value) != keys or not isinstance(value["semantic_sort"], bool):
+    if (not isinstance(value, dict) or not keys <= set(value)
+            or set(value) - keys - {"automatic_review", "review_timeout_seconds"}
+            or not isinstance(value["semantic_sort"], bool)
+            or type(value.get("automatic_review", False)) is not bool):
         raise ValueError("Invalid service settings")
+    from .review_model import validate_timeout
+    validate_timeout(value.get("review_timeout_seconds", 120))
     for key, maximum in (("l0_days", 3650), ("recovery_days", 365)):
         if type(value[key]) is not int or not 1 <= value[key] <= maximum:
             raise ValueError("Invalid retention interval")
-    if value["semantic_sort"]:
+    if value["semantic_sort"] or value.get("automatic_review", False):
         local_endpoint(value["base_url"])
         if not isinstance(value["model"], str) or not 0 < len(value["model"]) <= 200:
             raise ValueError("Explicit same-local-model identifier required")

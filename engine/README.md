@@ -188,3 +188,45 @@ Seven offline tests and source/compiler checks pass; native tests are compiled
 only. Full runtime, numerical/model/action parity, memory and speed remain open.
 No native engine/model/GPU/WSL run, binary/profile change, or Intel Vulkan routing
 change occurred. Existing upstream license and all earlier paper references remain.
+
+
+## Persistent draft-source learning - 23 October 2026
+
+The [portable source profile package](patches/prism-source-profile/README.md) adds request-to-request cost learning,
+profile export/import, frozen held-out evaluation and 24 Hermes-style workflows
+(72 requests). It is applied in a separate pinned Prism source checkout and
+supported by Xenolith's external Prism adapter; no installed binary is replaced.
+The native Gemma graph does not consume this profile. Hardware/build/settings
+mismatches require fresh calibration, rather than importing foreign timing priors.
+
+This extends ideas from [BanditSpec](https://arxiv.org/abs/2505.15141) and
+[SuffixDecoding](https://arxiv.org/abs/2411.04975), using a bounded deterministic
+rate selector and prompt-local suffix chains, not the full published algorithms.
+30 Python contracts pass and full speculation/server sources compile in syntax
+checks. Native/runtime/model parity and Intel speed tests remain unrun. No learned
+performance numbers or acceleration are claimed. Existing launch profiles remain
+disabled/unmodified; the target RAM-reserve issue remains a separate open item.
+
+
+User-authorized runtime update: [default-on source selector](patches/prism-source-default/README.md) retains
+cost learning across eligible MTP requests without an enabling env switch.
+The benchmark supplies explicit disk profile paths for restart persistence.
+Runtime identities now include adjacent shared libraries. No Intel speed claim
+is implied by a Windows/NVIDIA benchmark.
+
+## Runtime lifecycle increment — 23 October 2026
+
+The [runtime lifecycle package](patches/prism-runtime-lifecycle/README.md) adds
+masked MTP hidden-row selection, optional cache-line CPU scheduling, bounded
+aggregate telemetry and per-graph compute-buffer limits, and optional coalescing
+of redundant waits across consecutive blocking input copies. It is applied to the
+existing composed Prism development source; installed binaries are unchanged.
+Existing PTQ1 kernels, batched verification, exact rollback and Intel iGPU placement
+remain in place. Experimental scheduling, telemetry and wait coalescing default off.
+
+All 18 packaged model-free execution/translation-unit compile checks pass against
+the applied source. Hash guards and apply/reverse checks also pass. Real-model
+parity, recurrent backend execution, Linux build and Intel speed/RSS measurements
+remain required. Direct snapshot writes and alternative weight layouts are deferred
+until lifetime and profiling evidence justify them. See the package checklist and
+pinned source references before enabling experiments.

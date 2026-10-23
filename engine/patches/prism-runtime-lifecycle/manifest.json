@@ -1,0 +1,57 @@
+{
+  "patch_id": "prism-runtime-lifecycle-v1",
+  "date": "2026-10-23",
+  "commit": "ff414120c343e6e6cb868013c99f1dde52b27e70",
+  "requires": "exact composed local v3 + increment + source-selection + portable/default profile snapshot; hashes below are authoritative",
+  "patch_sha256": "c50bd16c5c3c75c1b97df50d8d53bed1867f2dfe83a3f3ffa3630868cb9b66e7",
+  "files": {
+    "ggml/src/ggml-alloc.c": {
+      "before_sha256": "213b48d6ef6d6ffef55c438db837116105de72cdae3dd152673035e61508d384",
+      "after_sha256": "75e4a1a839391d32ae2076beb6a91a6be9621b48fd414b595820fdb57e15de2c"
+    },
+    "ggml/src/ggml-backend.cpp": {
+      "before_sha256": "f203ec57c8dd347435b951138af86f9206400941d1cd40877121866352a91382",
+      "after_sha256": "55160ebf24018b0cd362ccb262d3a288aff12d773de371700cebec8cee006e4b"
+    },
+    "ggml/src/ggml-cpu/cacheline-schedule.h": {
+      "before_sha256": null,
+      "after_sha256": "8a86ad6ef6f821846cc1222b039d8add5c4bc128ede4a85efe256ab2b178ac76"
+    },
+    "ggml/src/ggml-cpu/ggml-cpu.c": {
+      "before_sha256": "2a82397e240bb2fbb4d83d09b5cdcd06ac1b981b3087c4e4586d2fe550fc30aa",
+      "after_sha256": "6957a521a8e2889a027e6df505fd57addb9e2ea5faf6758add06f38165879a23"
+    },
+    "ggml/src/runtime-memory-policy.h": {
+      "before_sha256": null,
+      "after_sha256": "944939c66f06a9fef395c2ceab575bfe5938194253a8b92902af8a619284e7a4"
+    },
+    "ggml/src/runtime-telemetry.h": {
+      "before_sha256": null,
+      "after_sha256": "6b2b542c02fef5b5eacd7468e937816071cade7a606fc454e857e3b404a8e4f2"
+    },
+    "src/models/qwen35.cpp": {
+      "before_sha256": "26447568ccb9eb1d5fc25382cc55087553af38f9c5506b213c95da2146a51705",
+      "after_sha256": "46618236dd895a19e510acc8486434f2d8056da324554b0705be4b20a03f8397"
+    },
+    "src/models/qwen35moe.cpp": {
+      "before_sha256": "3b20149675fc12045875797ab7ddc6b9f36c1491311763d28da22e2e12af816a",
+      "after_sha256": "bee943a7cc5f68bb6040a27807c01d20eb9c648848d6f7fc388426613ae44bde"
+    },
+    "tools/server/server-context.cpp": {
+      "before_sha256": "93e860f6236b99de5a0ee5be248bdb62c0344ebf117267107d90edf8b5e908d4",
+      "after_sha256": "ccf6e345c3659c0af63ebbaf826e5f0b7247b905c0c7d8b953d856e664577657"
+    }
+  },
+  "dependencies": {
+    "common/mtp-cpu-policy.h": "29c02cff3a2a0ce7fdc0d65234b551bb63c2682756f605040140ca289d38fa91",
+    "common/mtp-verify-copy.h": "4a8beac2f93e8705c53bdc62c98fb67fe80c7133814c416534f6414776675661",
+    "common/sampling.cpp": "f23f8d663932bfd73abac1bd5e99055fc6efb07e21ef27dd7e25af2f2da40bff",
+    "common/sandwich-policy.h": "2b01d87a20e9f645224d31800b0c61752899e48b5f28d8d40d9ef211555bc35c",
+    "common/source-policy.h": "f8fb67cae5e4b08218cfc446b51143eac5bdaca1439a526d4f23d374d8a16620",
+    "common/source-profile.h": "7a85bfafc03f55ee5caa0e4bd624931d6de3c31c4d5b031dd2dd93c3f4333107",
+    "common/speculative.cpp": "24dd181fdb31bdfd2af012e42d78553076ad55fbdf948ecbf52ede7901adff82",
+    "ggml/src/ggml-cpu/ptq1-qigen.h": "ccc0acbc3f941995cb0c8c8c4db526a244c5d15a4ff4c77e650c23646c34fec1",
+    "src/llama-context.cpp": "ccdfdc2665bc2aeb8e4d5bb6f3896efa1c4f86089041c75d44033c500198a63d",
+    "src/llama-memory-recurrent.cpp": "0c22ad19fe37bd53d8f66ec5ed1553320a0a3d4a69c38fea26e9931696f83563"
+  }
+}

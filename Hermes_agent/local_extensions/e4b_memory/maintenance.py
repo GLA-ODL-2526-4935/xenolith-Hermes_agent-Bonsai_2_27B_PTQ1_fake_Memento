@@ -135,7 +135,15 @@ class MaintenanceMixin:
                 raise PermissionError("Sort plan became stale or foreground work resumed")
             temporary = {r["id"]: r for r in state["records"] if r["bucket"] == "temporary"}
             plan = _validate_plan(temporary, assignments)
+            from .review import can_promote
             for key, layer in plan.items():
+                record = temporary[key]
+                if (state.get("automatic_review") or record.get("review_required")) and (
+                        layer != record["layer"] or not can_promote(state, record)):
+                    raise PermissionError("Accept a current same-layer conflict review before sorting/promotion")
+            for key, layer in plan.items():
+                if not can_promote(state, temporary[key]):
+                    raise PermissionError("Persistent layer changed; re-review before promotion")
                 temporary[key].update(layer=layer, bucket="persistent", consolidated=now)
             return len(plan)
 

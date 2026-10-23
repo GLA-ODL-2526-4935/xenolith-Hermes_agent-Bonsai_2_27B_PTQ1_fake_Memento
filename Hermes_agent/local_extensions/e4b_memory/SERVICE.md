@@ -1,5 +1,13 @@
 # Service-backed single-owner memory
 
+Optional remote owner acceptance: [DISCORD_REVIEW.md](DISCORD_REVIEW.md).
+The dedicated bot runs owner-side against the existing bank; model/controller
+HTTP credentials still cannot accept or reject proposals.
+
+Optional automatic drafts/conflict checks with manual owner decisions:
+[AUTOMATIC_REVIEW.md](AUTOMATIC_REVIEW.md). Configure on the service host, not the
+remote agent; model/controller credentials gain no acceptance capability.
+
 Implemented source, opt-in, NOT activated or Linux-isolated. No live service,
 Hermes application, model, browser, engine or GPU was launched during development.
 

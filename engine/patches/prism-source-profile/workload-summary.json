@@ -1,0 +1,10 @@
+{
+  "synthetic": true,
+  "official_hermes_benchmark": false,
+  "workflows": 24,
+  "requests": 72,
+  "calibration_requests": 54,
+  "heldout_requests": 18,
+  "real_tools_executed": false,
+  "split_unit": "workflow"
+}
