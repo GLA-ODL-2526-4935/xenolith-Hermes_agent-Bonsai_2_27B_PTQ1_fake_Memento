@@ -1,5 +1,10 @@
 # Additional inference review — 22 October 2026
 
+Current decision policy: conditional combination plan (local development notes; excluded from source distribution),
+25 October 2026. It supersedes blanket either/or selections below; retain this
+review as historical mechanisms/source-status evidence. Existing target-testing
+deferrals and correctness exclusions remain in force. No new runtime work.
+
 Target: Bonsai2 27B PTQ1 Lean, Intel i9-13900H-class CPU and shared-RAM Intel iGPU,
 16GB Linux laptop. Source preparation only. No model, native engine or GPU run.
 Read alongside `INTEL_INFERENCE_PAPER_REVIEW.md`,

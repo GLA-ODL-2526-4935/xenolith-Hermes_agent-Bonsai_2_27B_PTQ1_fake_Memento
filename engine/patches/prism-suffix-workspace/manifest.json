@@ -1,0 +1,31 @@
+{
+  "name": "bounded suffix workspace v1",
+  "commit": "ff414120c343e6e6cb868013c99f1dde52b27e70",
+  "files": {
+    "common/speculative.cpp": {
+      "before_sha256": "24dd181fdb31bdfd2af012e42d78553076ad55fbdf948ecbf52ede7901adff82",
+      "after_sha256": "8e98c9f7fa690a623d123e304c4de926f3bed63439dfe8f43b79ba032e6c6e0e"
+    },
+    "common/suffix-workspace.h": {
+      "before_sha256": null,
+      "after_sha256": "f45710d89bd368dbc4439f77d5ba1ca7399b26a6071c199b355ba6eca0b9cc7b"
+    }
+  },
+  "dependencies": {
+    "common/source-policy.h": "f8fb67cae5e4b08218cfc446b51143eac5bdaca1439a526d4f23d374d8a16620",
+    "common/source-profile.h": "7a85bfafc03f55ee5caa0e4bd624931d6de3c31c4d5b031dd2dd93c3f4333107",
+    "common/speculative.h": "37e93203b5f0b8893b413ab764d717db1634b4d2299511f3fa8f0ae643c99dc4",
+    "src/llama-memory-recurrent.cpp": "0c22ad19fe37bd53d8f66ec5ed1553320a0a3d4a69c38fea26e9931696f83563",
+    "ggml/src/ggml-cpu/ptq1-qigen.h": "ccc0acbc3f941995cb0c8c8c4db526a244c5d15a4ff4c77e650c23646c34fec1",
+    "ggml/src/ggml-alloc.c": "75e4a1a839391d32ae2076beb6a91a6be9621b48fd414b595820fdb57e15de2c",
+    "ggml/src/ggml-backend.cpp": "55160ebf24018b0cd362ccb262d3a288aff12d773de371700cebec8cee006e4b",
+    "ggml/src/ggml-cpu/cacheline-schedule.h": "8a86ad6ef6f821846cc1222b039d8add5c4bc128ede4a85efe256ab2b178ac76",
+    "ggml/src/ggml-cpu/ggml-cpu.c": "6957a521a8e2889a027e6df505fd57addb9e2ea5faf6758add06f38165879a23",
+    "ggml/src/runtime-memory-policy.h": "944939c66f06a9fef395c2ceab575bfe5938194253a8b92902af8a619284e7a4",
+    "ggml/src/runtime-telemetry.h": "6b2b542c02fef5b5eacd7468e937816071cade7a606fc454e857e3b404a8e4f2",
+    "src/models/qwen35.cpp": "46618236dd895a19e510acc8486434f2d8056da324554b0705be4b20a03f8397",
+    "src/models/qwen35moe.cpp": "bee943a7cc5f68bb6040a27807c01d20eb9c648848d6f7fc388426613ae44bde",
+    "tools/server/server-context.cpp": "ccf6e345c3659c0af63ebbaf826e5f0b7247b905c0c7d8b953d856e664577657"
+  },
+  "patch_sha256": "9e0219db15b73e71ccd1c0a28ca39ab13adadaeec7a6c472d2c634fb519c555e"
+}

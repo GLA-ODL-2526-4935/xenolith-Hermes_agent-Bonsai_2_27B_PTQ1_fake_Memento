@@ -27,7 +27,7 @@ def build_client(review):
         async def send(text, attachment):
             kwargs = {"allowed_mentions": discord.AllowedMentions.none(), "suppress_embeds": True}
             if attachment is not None:
-                kwargs["file"] = discord.File(io.BytesIO(attachment), filename="memory-proposal.json")
+                kwargs["file"] = discord.File(io.BytesIO(attachment), filename="memory-proposal.md")
             await message.channel.send(text, **kwargs)
 
         if review.authorized(message.author.id, direct=direct, bot=message.author.bot,

@@ -1,0 +1,127 @@
+[
+  {
+    "repo": "microsoft/onnxruntime",
+    "commit": "84829e76d4fbb4a7258202f777fa4ff0876a3564",
+    "files": [
+      {
+        "path": "onnxruntime/core/framework/execution_frame.cc",
+        "url": "https://raw.githubusercontent.com/microsoft/onnxruntime/84829e76d4fbb4a7258202f777fa4ff0876a3564/onnxruntime/core/framework/execution_frame.cc",
+        "bytes": 45754
+      },
+      {
+        "path": "onnxruntime/core/framework/bfc_arena.cc",
+        "url": "https://raw.githubusercontent.com/microsoft/onnxruntime/84829e76d4fbb4a7258202f777fa4ff0876a3564/onnxruntime/core/framework/bfc_arena.cc",
+        "bytes": 32576
+      },
+      {
+        "path": "LICENSE",
+        "url": "https://raw.githubusercontent.com/microsoft/onnxruntime/84829e76d4fbb4a7258202f777fa4ff0876a3564/LICENSE",
+        "bytes": 1073
+      }
+    ]
+  },
+  {
+    "repo": "openvinotoolkit/openvino",
+    "commit": "695d69efe543b9e6c75361bc5d3df9c866d9c6ed",
+    "files": [
+      {
+        "path": "src/plugins/intel_cpu/src/memory_control.cpp",
+        "url": "https://raw.githubusercontent.com/openvinotoolkit/openvino/695d69efe543b9e6c75361bc5d3df9c866d9c6ed/src/plugins/intel_cpu/src/memory_control.cpp",
+        "bytes": 21077
+      },
+      {
+        "path": "src/plugins/intel_cpu/src/memory_control.hpp",
+        "url": "https://raw.githubusercontent.com/openvinotoolkit/openvino/695d69efe543b9e6c75361bc5d3df9c866d9c6ed/src/plugins/intel_cpu/src/memory_control.hpp",
+        "bytes": 2664
+      },
+      {
+        "path": "LICENSE",
+        "url": "https://raw.githubusercontent.com/openvinotoolkit/openvino/695d69efe543b9e6c75361bc5d3df9c866d9c6ed/LICENSE",
+        "bytes": 11357
+      }
+    ]
+  },
+  {
+    "repo": "google/XNNPACK",
+    "commit": "26186f85939753b9a509734b193aad2bcb17518f",
+    "files": [
+      {
+        "path": "src/runtime.c",
+        "url": "https://raw.githubusercontent.com/google/XNNPACK/26186f85939753b9a509734b193aad2bcb17518f/src/runtime.c",
+        "bytes": 50163
+      },
+      {
+        "path": "src/memory-planner.c",
+        "url": "https://raw.githubusercontent.com/google/XNNPACK/26186f85939753b9a509734b193aad2bcb17518f/src/memory-planner.c",
+        "bytes": 12316
+      },
+      {
+        "path": "LICENSE",
+        "url": "https://raw.githubusercontent.com/google/XNNPACK/26186f85939753b9a509734b193aad2bcb17518f/LICENSE",
+        "bytes": 1560
+      }
+    ]
+  },
+  {
+    "repo": "mlc-ai/mlc-llm",
+    "commit": "8978ea9aec626d64096aaa92fbc89bda2e3ea802",
+    "files": [
+      {
+        "path": "cpp/serve/engine.cc",
+        "url": "https://raw.githubusercontent.com/mlc-ai/mlc-llm/8978ea9aec626d64096aaa92fbc89bda2e3ea802/cpp/serve/engine.cc",
+        "bytes": 49367
+      },
+      {
+        "path": "cpp/serve/model.cc",
+        "url": "https://raw.githubusercontent.com/mlc-ai/mlc-llm/8978ea9aec626d64096aaa92fbc89bda2e3ea802/cpp/serve/model.cc",
+        "bytes": 59878
+      },
+      {
+        "path": "LICENSE",
+        "url": "https://raw.githubusercontent.com/mlc-ai/mlc-llm/8978ea9aec626d64096aaa92fbc89bda2e3ea802/LICENSE",
+        "bytes": 11357
+      }
+    ]
+  },
+  {
+    "repo": "kvcache-ai/ktransformers",
+    "commit": "a694e718e8b3ec2e221277d674e369f3be38d2a4",
+    "files": [
+      {
+        "path": "README.md",
+        "url": "https://raw.githubusercontent.com/kvcache-ai/ktransformers/a694e718e8b3ec2e221277d674e369f3be38d2a4/README.md",
+        "bytes": 13544
+      },
+      {
+        "path": "doc/en/kt-kernel/AVX2-Tutorial.md",
+        "url": "https://raw.githubusercontent.com/kvcache-ai/ktransformers/a694e718e8b3ec2e221277d674e369f3be38d2a4/doc/en/kt-kernel/AVX2-Tutorial.md",
+        "bytes": 6380
+      },
+      {
+        "path": "LICENSE",
+        "url": "https://raw.githubusercontent.com/kvcache-ai/ktransformers/a694e718e8b3ec2e221277d674e369f3be38d2a4/LICENSE",
+        "bytes": 11357
+      }
+    ]
+  },
+  {
+    "repo": "EricLBuehler/mistral.rs",
+    "commit": "012b9bec941e62eecf6acc0f5a8a3e696f7bf906",
+    "files": [
+      {
+        "path": "README.md",
+        "url": "https://raw.githubusercontent.com/EricLBuehler/mistral.rs/012b9bec941e62eecf6acc0f5a8a3e696f7bf906/README.md",
+        "bytes": 14338
+      },
+      {
+        "path": "mistralrs-core/src/prefix_cacher/mod.rs",
+        "error": "HTTP Error 404: Not Found"
+      },
+      {
+        "path": "LICENSE",
+        "url": "https://raw.githubusercontent.com/EricLBuehler/mistral.rs/012b9bec941e62eecf6acc0f5a8a3e696f7bf906/LICENSE",
+        "bytes": 1068
+      }
+    ]
+  }
+]

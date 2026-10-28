@@ -1,0 +1,9 @@
+{
+  "file": "Ternary-Bonsai-2-27B-PTQ1_0-mtp-lean.gguf",
+  "bytes": 6297658848,
+  "sha256": "1e33c571a5ce7a9a3e42474d66192923d5a6d77da7fb3a22986dc809522b5685",
+  "source": "https://huggingface.co/sudoingx/Ternary-Bonsai-2-27B-PTQ1_0-MTP-GGUF",
+  "variant": "Community PTQ1_0 MTP Lean, original bundled head; not the separately trained replacement head",
+  "distribution": "Weights excluded from Git; transfer separately or download the exact matching artifact",
+  "verified_utc": "2026-10-28T00:38:56.5571529Z"
+}

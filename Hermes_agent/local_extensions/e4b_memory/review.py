@@ -51,6 +51,7 @@ def next_job(state):
     if len(proposals) >= 128:
         raise ValueError("Proposal capacity reached; owner export/cleanup required")
     attempted = state.get("memory_review_attempts", {})
+    attempted = {**state.get("memory_review_archived_bases", {}), **attempted}
     # Resolve existing temporary records first; never mix layers in one review.
     for record in state["records"]:
         if record["bucket"] != "temporary" or can_promote(state, record):
@@ -148,7 +149,7 @@ def run_review(store, settings, *, request=None, now=None):
     return {"status": "failed" if error else "proposed"}
 
 
-def decide(store, proposal_id, accept, *, now=None, expected_digest=None):
+def decide(store, proposal_id, accept, *, now=None, expected_digest=None, selected_drafts=None):
     """OWNER ONLY. Accept exact inspected content, or reject without changing records."""
     from .store import fingerprint
     now = time.time() if now is None else now
@@ -162,13 +163,31 @@ def decide(store, proposal_id, accept, *, now=None, expected_digest=None):
             raise PermissionError("Proposal changed since inspection; inspect again")
         job, result = proposal["job"], proposal["result"]
         validate_result(job, result)
+        selection = _selection(job, result, accept, selected_drafts)
         if accept:
-            _accept(state, job, result, now, fingerprint)
-        proposal.update(status="accepted" if accept else "rejected", decided=now)
+            chosen = result if selection is None else {"records": [result["records"][i - 1] for i in selection]}
+            _accept(state, job, chosen, now, fingerprint)
+        status = "accepted" if accept else "rejected"
+        if selection is not None:
+            proposal["accepted_drafts"] = selection
+            proposal["rejected_drafts"] = [i for i in range(1, len(result["records"]) + 1) if i not in selection]
+            if proposal["rejected_drafts"]:
+                status = "partially_accepted"
+        proposal.update(status=status, decided=now)
     saved = store.snapshot()["memory_proposals"][proposal_id]
-    if saved["status"] != ("accepted" if accept else "rejected"):
+    if saved["status"] != status:
         raise OSError("Decision readback failed; reconcile, do not repeat side effects")
     return {"id": proposal_id, "status": saved["status"]}
+
+
+def _selection(job, result, accept, selected):
+    if selected is None:
+        return None
+    if (not accept or job["kind"] != "generate" or not isinstance(selected, list) or not selected
+            or any(type(i) is not int or not 1 <= i <= len(result["records"]) for i in selected)
+            or len(set(selected)) != len(selected)):
+        raise ValueError("Select distinct one-based draft numbers on generation acceptance only")
+    return sorted(selected)
 
 
 def _accept(state, job, result, now, fingerprint):

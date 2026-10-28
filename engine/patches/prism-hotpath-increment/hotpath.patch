@@ -1,0 +1,106 @@
+--- a/common/suffix-workspace.h
++++ b/common/suffix-workspace.h
+@@ -31,24 +31,36 @@
+     auto & matches=scratch.matches;
+     auto & votes=scratch.votes;
+     const auto token=[&](size_t i) { return i<retained?prompt[offset+i]:last; };
+-    for (size_t width=std::min<size_t>(16,n);width>=2;--width) {
+-        for (size_t end=width;end<n;++end) {
+-            if (prompt[offset+end-1]==last &&
+-                    std::equal(prompt.begin()+offset+end-width,prompt.begin()+offset+end-1,
+-                        prompt.end()-(width-1))) matches.push_back(end);
+-        }
+-        if (!matches.empty()) break;
++    size_t longest=1;
++    for (size_t end=2;end<n;++end) {
++        if (prompt[offset+end-1]!=last) continue;
++        const size_t limit=std::min<size_t>(16,end);
++        size_t width=1;
++        while (width<limit && prompt[offset+end-1-width]==token(n-1-width)) ++width;
++        if (width<2 || width<longest) continue;
++        if (width>longest) { matches.clear(); longest=width; }
++        matches.push_back(end);
+     }
+     for (int depth=0;depth<maximum && !matches.empty();++depth) {
+         votes.clear();
+         for (auto pos:matches) if (pos+(size_t)depth<n) votes.push_back(token(pos+depth));
+         if (votes.empty()) break;
+-        std::sort(votes.begin(),votes.end());
+-        Token best=votes.front(); size_t hits=0;
+-        for (size_t i=0;i<votes.size();) {
+-            size_t j=i+1; while (j<votes.size() && votes[j]==votes[i]) ++j;
+-            if (j-i>hits) { hits=j-i; best=votes[i]; }
+-            i=j;
++        // Two counters retain every candidate above one third of the votes.
++        // This includes both possible half-vote ties; verify using all matches.
++        Token candidates[2]={}; size_t counts[2]={};
++        for (Token value:votes) {
++            if (counts[0] && value==candidates[0]) ++counts[0];
++            else if (counts[1] && value==candidates[1]) ++counts[1];
++            else if (!counts[0]) { candidates[0]=value; counts[0]=1; }
++            else if (!counts[1]) { candidates[1]=value; counts[1]=1; }
++            else { --counts[0]; --counts[1]; }
++        }
++        Token best={}; size_t hits=0;
++        for (int i=0;i<2;++i) if (counts[i]) {
++            const size_t count=(size_t)std::count(votes.begin(),votes.end(),candidates[i]);
++            if (count>hits || (count==hits && candidates[i]<best)) {
++                hits=count; best=candidates[i];
++            }
+         }
+         if (hits*2<matches.size()) break;
+         result.push_back(best);
+--- a/ggml/src/ggml-cpu/arch/x86/ptq1-pair-lut.h
++++ b/ggml/src/ggml-cpu/arch/x86/ptq1-pair-lut.h
+@@ -69,7 +69,11 @@
+ #else
+         uint8_t indices[64][16] = {{0}};
+ #endif
++#if defined(GGML_PTQ1_PAIR_LUT_VECTOR_SCALE)
++        float weight_scale[16] = {0};
++#else
+         float weight_scale[16];
++#endif
+         for (int r = 0; r < rows; ++r) {
+             const block_ptq1_0 * x = (const block_ptq1_0 *) ((const char *) vx+r*weight_row_stride)+b;
+             uint8_t codes[128];
+@@ -79,7 +83,11 @@
+         }
+         for (int c = 0; c < columns; ++c) {
+             const block_q8_0 * y = (const block_q8_0 *) ((const char *) vy+c*activation_col_stride)+4*b;
++#if defined(GGML_PTQ1_PAIR_LUT_VECTOR_SCALE)
++            __m256 partial0 = _mm256_setzero_ps(), partial1 = partial0;
++#else
+             float partial[16] = {0};
++#endif
+             for (int g = 0; g < 4; ++g) {
+ #if defined(GGML_PTQ1_PAIR_LUT_COMPACT)
+                 __m256i sum16 = _mm256_setzero_si256();
+@@ -110,14 +118,27 @@
+                 const __m256i sum0 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(sum16));
+                 const __m256i sum1 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(sum16,1));
+ #endif
++#if defined(GGML_PTQ1_PAIR_LUT_VECTOR_SCALE)
++                const __m256 scale = _mm256_set1_ps(GGML_CPU_FP16_TO_FP32(y[g].d));
++                partial0 = _mm256_add_ps(partial0, _mm256_mul_ps(scale, _mm256_cvtepi32_ps(sum0)));
++                partial1 = _mm256_add_ps(partial1, _mm256_mul_ps(scale, _mm256_cvtepi32_ps(sum1)));
++#else
+                 int32_t sums[16];
+                 _mm256_storeu_si256((__m256i *) sums,sum0);
+                 _mm256_storeu_si256((__m256i *) (sums+8),sum1);
+                 const float scale = GGML_CPU_FP16_TO_FP32(y[g].d);
+                 // Same four scale applications and block reduction as upstream.
+                 for (int r = 0; r < rows; ++r) partial[r] += scale*sums[r];
++#endif
+             }
++#if defined(GGML_PTQ1_PAIR_LUT_VECTOR_SCALE)
++            _mm256_storeu_ps(totals[c], _mm256_add_ps(_mm256_loadu_ps(totals[c]),
++                _mm256_mul_ps(_mm256_loadu_ps(weight_scale), partial0)));
++            _mm256_storeu_ps(totals[c]+8, _mm256_add_ps(_mm256_loadu_ps(totals[c]+8),
++                _mm256_mul_ps(_mm256_loadu_ps(weight_scale+8), partial1)));
++#else
+             for (int r = 0; r < rows; ++r) totals[c][r] += weight_scale[r]*partial[r];
++#endif
+         }
+     }
+     for (int c = 0; c < columns; ++c)

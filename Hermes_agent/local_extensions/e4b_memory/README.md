@@ -1,5 +1,8 @@
 # E4B single-user memory
 
+Markdown review, individual draft selection, history/archive management and the
+restart-applied workflow switch: [REVIEW_WORKFLOW.md](REVIEW_WORKFLOW.md).
+
 Opt-in automatic draft generation and same-layer conflict review now have an
 owner-accepted proposal workflow; see [AUTOMATIC_REVIEW.md](AUTOMATIC_REVIEW.md).
 Optional owner-only Discord DM acceptance is described in

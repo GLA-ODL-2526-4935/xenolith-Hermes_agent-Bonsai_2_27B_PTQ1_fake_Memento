@@ -1,5 +1,9 @@
 # Automatic drafts and same-layer conflict review
 
+Readable Markdown review, per-draft acceptance and owner archival are now available:
+[REVIEW_WORKFLOW.md](REVIEW_WORKFLOW.md). The combined launcher and owner helper
+provide a restart-applied generation/check switch; acceptance stays manual.
+
 Implemented source, **opt-in and not activated**. Temporary memory remains L0–L3.
 No checkpoint API v2, model inference, Linux deployment or live profile change
 is part of this increment.
@@ -84,9 +88,11 @@ Neither model nor controller bearer credentials can approve proposals.
 - Full same-layer comparison is limited to 32 persistent records and the input
   budget. Overflow blocks that check; it never labels a partial search complete.
   Large-bank indexed/chunked coverage and true preemption are future work.
-- Up to 128 stored proposal audits and 256 attempted source signatures. Capacity
-  stops work, not silent eviction. Owner export/offline maintenance is currently
-  required at these limits; no automatic proposal deletion or cleanup UI exists.
+- Up to 128 live proposal audits and 256 attempted source signatures. Capacity
+  stops work, not silent eviction. Owner preview/confirmed archival now backs up
+  closed/stale audits before freeing queue/attempt slots; a separate 4,096 archived
+  source-signature limit prevents immediate regeneration. No automatic deletion
+  or graphical cleanup UI exists; see the owner commands in REVIEW_WORKFLOW.md.
 - Generation uses the existing last-eight bounded tool candidates and optional
   bounded goal excerpt, **not a complete day/session archive**. Ordinary failures
   remain recovery-only. User preference/decision drafts require a user source;

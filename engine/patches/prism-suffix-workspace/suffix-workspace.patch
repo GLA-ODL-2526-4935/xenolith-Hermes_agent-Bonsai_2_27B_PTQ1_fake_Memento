@@ -1,0 +1,119 @@
+--- a/common/speculative.cpp
++++ b/common/speculative.cpp
+@@ -2,6 +2,7 @@
+ #include "mtp-cpu-policy.h"
+ #include "source-policy.h"
+ #include "source-profile.h"
++#include "suffix-workspace.h"
+ #include <stdexcept>
+ #if defined(LLAMA_MTP_COMPACT_VERIFY)
+ #include "mtp-verify-copy.h"
+@@ -3031,6 +3032,8 @@
+     std::vector<common_speculative_impl *> impl_last;
+     bool source_policy = false;
+     bool suffix_enabled = false;
++    bool suffix_workspace_enabled = false;
++    common_suffix_workspace<llama_token> suffix_workspace;
+     int source_cap = 0;
+     int source_force = -1; // explicit later-run A/B control, not an autotuner
+     common_source_policy policy; // single-slot experimental server mode only
+@@ -3535,6 +3538,8 @@
+     };
+ 
+     result->source_policy=source_policy;
++    const char * workspace_env=std::getenv("LLAMA_SPEC_SUFFIX_WORKSPACE");
++    result->suffix_workspace_enabled=workspace_env && std::strcmp(workspace_env,"1")==0;
+     result->suffix_enabled=suffix_enabled;
+     result->source_cap=std::min(4,params.draft.n_max);
+     result->source_force=source_force;
+@@ -3579,6 +3584,7 @@
+ 
+ void common_speculative_cycle_end(common_speculative * spec, llama_seq_id seq_id) {
+     if (!spec || !spec->source_policy || seq_id!=0) return;
++    spec->suffix_workspace.release();
+     spec->policy.active=false; // censor unfinished cancellation/error cycle
+     if (spec->profiles) {
+         try { spec->profiles->save(); }
+@@ -3610,6 +3616,7 @@
+     }
+ 
+     if (spec->source_policy) {
++        spec->suffix_workspace.release();
+         spec->policy.reset();
+         spec->impl_last[seq_id]=nullptr;
+     }
+@@ -3664,7 +3671,11 @@
+         if (arm==0 || arm>4) {
+             if (arm>4 && dp.drafting) {
+                 const int cap=dp.n_max<0?arm-4:std::min(arm-4,dp.n_max);
+-                *dp.result=common_suffix_chain(*dp.prompt,dp.id_last,cap);
++                if (spec->suffix_workspace_enabled) {
++                    common_suffix_chain_reuse(*dp.prompt,dp.id_last,cap,spec->suffix_workspace,*dp.result);
++                } else {
++                    *dp.result=common_suffix_chain(*dp.prompt,dp.id_last,cap);
++                }
+             }
+             dp.drafting=false;
+             return;
+--- /dev/null
++++ b/common/suffix-workspace.h
+@@ -0,0 +1,59 @@
++// SPDX-License-Identifier: MIT
++#pragma once
++#include "source-policy.h"
++#include <utility>
++
++template<class Token>
++struct common_suffix_workspace {
++    std::vector<size_t> matches;
++    std::vector<Token> votes;
++    void release() {
++        std::vector<size_t>().swap(matches);
++        std::vector<Token>().swap(votes);
++    }
++};
++
++// Borrow the prompt only for this synchronous call. Keep scratch until request end.
++template<class Token>
++static void common_suffix_chain_reuse(const std::vector<Token> & prompt, Token last,
++        int maximum, common_suffix_workspace<Token> & scratch, std::vector<Token> & result) {
++    if (&prompt==&result || &result==&scratch.votes || &prompt==&scratch.votes) {
++        auto value=common_suffix_chain(prompt,last,maximum);
++        result=std::move(value);
++        return;
++    }
++    result.clear(); scratch.matches.clear(); scratch.votes.clear();
++    maximum=std::max(0,std::min(4,maximum));
++    const size_t retained=std::min<size_t>(8191,prompt.size());
++    const size_t n=retained+1, offset=prompt.size()-retained;
++    if (!maximum || n<3) return;
++    scratch.matches.reserve(8192); scratch.votes.reserve(8192); result.reserve(4);
++    auto & matches=scratch.matches;
++    auto & votes=scratch.votes;
++    const auto token=[&](size_t i) { return i<retained?prompt[offset+i]:last; };
++    for (size_t width=std::min<size_t>(16,n);width>=2;--width) {
++        for (size_t end=width;end<n;++end) {
++            if (prompt[offset+end-1]==last &&
++                    std::equal(prompt.begin()+offset+end-width,prompt.begin()+offset+end-1,
++                        prompt.end()-(width-1))) matches.push_back(end);
++        }
++        if (!matches.empty()) break;
++    }
++    for (int depth=0;depth<maximum && !matches.empty();++depth) {
++        votes.clear();
++        for (auto pos:matches) if (pos+(size_t)depth<n) votes.push_back(token(pos+depth));
++        if (votes.empty()) break;
++        std::sort(votes.begin(),votes.end());
++        Token best=votes.front(); size_t hits=0;
++        for (size_t i=0;i<votes.size();) {
++            size_t j=i+1; while (j<votes.size() && votes[j]==votes[i]) ++j;
++            if (j-i>hits) { hits=j-i; best=votes[i]; }
++            i=j;
++        }
++        if (hits*2<matches.size()) break;
++        result.push_back(best);
++        matches.erase(std::remove_if(matches.begin(),matches.end(),[&](size_t pos) {
++            return pos+(size_t)depth>=n || token(pos+depth)!=best;
++        }),matches.end());
++    }
++}

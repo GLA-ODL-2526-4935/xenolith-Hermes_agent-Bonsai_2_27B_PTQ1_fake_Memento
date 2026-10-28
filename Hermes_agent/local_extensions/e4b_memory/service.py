@@ -100,7 +100,8 @@ def main(argv=None):
         if name == "serve":
             child.add_argument("--port", type=int, required=True)
     args = parser.parse_args(argv)
-    print(json.dumps(args.service_handler(args), ensure_ascii=False, indent=2))
+    result = args.service_handler(args)
+    print(result if isinstance(result, str) else json.dumps(result, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

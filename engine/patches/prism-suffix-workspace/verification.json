@@ -1,0 +1,27 @@
+[
+  {
+    "name": "suffix-compile",
+    "returncode": 0,
+    "seconds": 0.8705074000172317
+  },
+  {
+    "name": "suffix-parity-allocation-benchmark",
+    "returncode": 0,
+    "seconds": 1.3326973000075668
+  },
+  {
+    "name": "hooks-compile",
+    "returncode": 0,
+    "seconds": 0.6683729998767376
+  },
+  {
+    "name": "actual-request-boundary-hooks",
+    "returncode": 0,
+    "seconds": 0.0584867000579834
+  },
+  {
+    "name": "full-speculative-compile",
+    "returncode": 0,
+    "seconds": 6.829353400040418
+  }
+]

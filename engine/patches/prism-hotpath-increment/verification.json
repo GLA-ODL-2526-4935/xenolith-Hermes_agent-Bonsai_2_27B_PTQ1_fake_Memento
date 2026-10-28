@@ -1,0 +1,90 @@
+[
+  {
+    "name": "suffix-compile",
+    "returncode": 0
+  },
+  {
+    "name": "suffix-parity-benchmark",
+    "returncode": 0
+  },
+  {
+    "name": "vector-compile-0",
+    "returncode": 0
+  },
+  {
+    "name": "vector-parity-benchmark-0",
+    "returncode": 0
+  },
+  {
+    "name": "vector-compile-1",
+    "returncode": 0
+  },
+  {
+    "name": "vector-parity-benchmark-1",
+    "returncode": 0
+  },
+  {
+    "name": "full-speculative-compile",
+    "returncode": 0,
+    "command": [
+      "C:\\Strawberry\\c\\bin\\g++.exe",
+      "-std=c++17",
+      "-Icommon",
+      "-Iggml/include",
+      "-Iinclude",
+      "-Ivendor",
+      "-Isrc",
+      "-c",
+      "common/speculative.cpp",
+      "-o",
+      "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\hotpath-increment\\speculative.o"
+    ]
+  },
+  {
+    "name": "full-quants-default",
+    "returncode": 0,
+    "command": [
+      "C:\\Strawberry\\c\\bin\\gcc.exe",
+      "-std=c11",
+      "-O2",
+      "-mavx2",
+      "-mfma",
+      "-mf16c",
+      "-ffp-contract=off",
+      "-Iggml/include",
+      "-Iggml/src",
+      "-Iggml/src/ggml-cpu",
+      "-c",
+      "ggml/src/ggml-cpu/arch/x86/quants.c",
+      "-o",
+      "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\hotpath-increment\\quants-default.o"
+    ]
+  },
+  {
+    "name": "full-quants-vector-compact",
+    "returncode": 0,
+    "command": [
+      "C:\\Strawberry\\c\\bin\\gcc.exe",
+      "-std=c11",
+      "-O2",
+      "-mavx2",
+      "-mfma",
+      "-mf16c",
+      "-ffp-contract=off",
+      "-DGGML_PTQ1_PAIR_LUT_COMPACT",
+      "-DGGML_PTQ1_PAIR_LUT_VECTOR_SCALE",
+      "-Iggml/include",
+      "-Iggml/src",
+      "-Iggml/src/ggml-cpu",
+      "-c",
+      "ggml/src/ggml-cpu/arch/x86/quants.c",
+      "-o",
+      "C:\\Users\\Bion\\Documents\\Codex\\2026-10-18\\new-chat\\work\\hotpath-increment\\quants-vector-compact.o"
+    ]
+  },
+  {
+    "name": "package-apply-reverse-drift-fixture",
+    "returncode": 0,
+    "note": "Commit query mocked only in isolated fixture; real commit checked at installation."
+  }
+]

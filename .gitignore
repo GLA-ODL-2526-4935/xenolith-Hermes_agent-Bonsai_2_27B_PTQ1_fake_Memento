@@ -183,3 +183,28 @@ cython_debug/
 # Local project planning documents (all directories; keep local, do not publish).
 Local_*_Plan_v*.md
 PROJECT_FUNCTION_CHECKLIST.md
+
+# Owner machine-specific startup configuration / generated desktop entry.
+/launch.local.json
+/Start Project.desktop
+
+# Local research plans and machine-specific evaluation records.
+/engine/docs/CONDITIONAL_OPTIMIZATION_PLAN.md
+/engine/docs/ENGINE_DECODE_STRUCTURE_ROADMAP.md
+/engine/docs/AI_PC_PTQ1_INTEL_ADAPTATION_PLAN.md
+/engine/docs/AI_PC_ARITHMETIC_PLAN_CHECK.json
+/engine/docs/CPU_DECODE_PAPER_CANDIDATES.md
+/engine/docs/OFFLINE_SECURITY_TEST_REPORT.md
+/engine/calibration/bonsai27-windows-rtx5080-hermes-20261023/
+/engine/patches/prism-suffix-workspace/microbenchmark.csv
+
+# Local generated state; never publish credentials or training artifacts.
+/models/artifacts/
+/outputs/
+/reports/
+/checkpoints/
+
+# Weight artifacts anywhere in the source tree.
+*.gguf
+*.safetensors
+*.ckpt

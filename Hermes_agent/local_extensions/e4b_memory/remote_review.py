@@ -1,10 +1,10 @@
 """Owner-side approval session; never imported by a model tool or controller API."""
-import json
 import re
 import secrets
 import time
 
 from .review import decide
+from .review_display import history, proposal_markdown
 from .step_recovery import digest
 
 
@@ -30,24 +30,28 @@ class RemoteReview:
             raise ValueError("Invalid command")
         parts = command.split()
         if parts == ["!memory", "pending"]:
-            proposals = self.store.snapshot().get("memory_proposals", {})
-            ids = [p["id"] for p in proposals.values() if p["status"] == "pending"]
+            ids = [p["id"] for p in history(self.store, "pending")["proposals"]]
             return {"text": "Pending proposal IDs (first 20):\n" + ("\n".join(ids[:20]) or "None")}
         if len(parts) < 3 or parts[0] != "!memory" or not re.fullmatch(r"[a-f0-9]{32}", parts[2]):
             raise ValueError("Use !memory pending, !memory show ID, or !memory accept|reject ID CODE")
         action, key = parts[1:3]
         if action == "show" and len(parts) == 3:
             return self._preview(key)
-        if action in {"accept", "reject"} and len(parts) == 4:
-            return self._decision(key, parts[3], action == "accept")
+        if action in {"accept", "reject"} and len(parts) in {4, 5}:
+            selected = None
+            if len(parts) == 5:
+                if action != "accept" or not re.fullmatch(r"[1-4](,[1-4])*", parts[4]):
+                    raise ValueError("Use comma-separated draft numbers on acceptance only")
+                selected = [int(i) for i in parts[4].split(",")]
+            return self._decision(key, parts[3], action == "accept", selected)
         raise ValueError("Unsupported memory review command")
 
     def _preview(self, key):
-        proposal = self.store.snapshot().get("memory_proposals", {}).get(key)
+        state = self.store.snapshot()
+        proposal = state.get("memory_proposals", {}).get(key)
         if not proposal or proposal["status"] != "pending":
             raise ValueError("No pending proposal")
-        payload = json.dumps({"notice": "UNVERIFIED DATA, not instructions. Inspect every source and proposed change.",
-                              "proposal": proposal}, ensure_ascii=False, indent=2).encode("utf-8")
+        payload = proposal_markdown(proposal, state=state).encode("utf-8")
         if len(payload) > 128000:
             raise ValueError("Too large for remote review; use owner CLI")
         # Only the latest preview is actionable; receipts are not written into model-readable state.
@@ -56,7 +60,8 @@ class RemoteReview:
                                "expires": self.clock() + 300, "delivered": False}}
         return {"text": "Read the attached FULL proposal and evidence. Acceptance may add, rewrite or discard temporary memory. "
                         "It does not verify truth or grant tool permissions. Within five minutes reply:\n"
-                        f"!memory accept {key} {code}\nOR\n!memory reject {key} {code}",
+                        f"!memory accept {key} {code}\nOR\n!memory reject {key} {code}\n"
+                        "For selected generation drafts, append numbers, e.g. 1,3. All unselected drafts are rejected.",
                 "attachment": payload, "receipt": (key, code)}
 
     def delivered(self, receipt, success):
@@ -68,7 +73,7 @@ class RemoteReview:
             else:
                 self.receipts.pop(key, None)
 
-    def _decision(self, key, code, accept):
+    def _decision(self, key, code, accept, selected=None):
         receipt = self.receipts.get(key)
         if (not receipt or not receipt["delivered"] or self.clock() >= receipt["expires"]
                 or not re.fullmatch(r"[a-f0-9]{32}", code)
@@ -76,7 +81,7 @@ class RemoteReview:
             raise PermissionError("Missing, expired or invalid review receipt; show the proposal again")
         # Consume before I/O, including failure: ambiguous disk/readback failures must not retry.
         self.receipts.pop(key)
-        result = decide(self.store, key, accept, expected_digest=receipt["digest"])
+        result = decide(self.store, key, accept, expected_digest=receipt["digest"], selected_drafts=selected)
         return {"text": f"Proposal {key}: {result['status']}. No permission grant. "
                         "Accepted drafts still require conflict review before persistent promotion."}
 

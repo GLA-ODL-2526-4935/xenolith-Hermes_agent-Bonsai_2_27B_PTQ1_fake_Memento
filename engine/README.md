@@ -1,5 +1,11 @@
 # Xenolith engine components
 
+Current optimization selection: conditional combinations C1–C8 (local development notes; excluded from source distribution)
+(25 October 2026), replacing blanket either/or choices in earlier reviews.
+Reuse shape dispatch and one cost controller; condition layouts/attention on actual
+eligibility. This is a plan revision, not runtime activation or Intel acceptance.
+Paper references and historical implementation boundaries below remain intact.
+
 Two explicit routes:
 
 | Route | Implementation | Current status |
@@ -13,7 +19,7 @@ Bonsai is not passed through the Gemma loader/template, and native snapshot/wire
 
 `make check-backends` uses Python-only no-model contract tests. `make` still builds only the native E4B engine and requires compatible Linux GCC, Level Zero and Intel ocloc. No C build, engine/model test or GPU workload was run in this Windows revision.
 
-The [active plan](docs/Local_Bonsai27_Hermes_Xenolith_Memory_Plan_v5.md), [checklist](docs/PROJECT_FUNCTION_CHECKLIST.md) and [E4B source status](docs/E4B_PORT_STATUS.md) distinguish present source, historical reference checks and pending target validation. Vision, native Bonsai kernels, full Hermes integration and physical KV eviction remain unfinished. Original licensing remains in [LICENSE.md](LICENSE.md).
+The active plan (local development notes; excluded from source distribution), checklist (local development notes; excluded from source distribution) and [E4B source status](docs/E4B_PORT_STATUS.md) distinguish present source, historical reference checks and pending target validation. Vision, native Bonsai kernels, full Hermes integration and physical KV eviction remain unfinished. Original licensing remains in [LICENSE.md](LICENSE.md).
 
 ## Intel CPU optimization increment — 22 October 2026
 
@@ -71,8 +77,8 @@ target setting; this increment does not remove safeguards or invent a new reserv
 
 ## Decode research roadmap and paper references
 
-The [structure roadmap](docs/ENGINE_DECODE_STRUCTURE_ROADMAP.md) explains mechanisms,
-compatibility, selection and fallback; [checklist section 4A](docs/PROJECT_FUNCTION_CHECKLIST.md#4a-bonsai-prism-paper-derived-decode-structures)
+The structure roadmap (local development notes; excluded from source distribution) explains mechanisms,
+compatibility, selection and fallback; checklist section 4A (local development notes; excluded from source distribution)
 contains the implementation gates. The initial research revision was documentation-only;
 see the v3 source status below. Prioritize
 BITCOS feasibility, exact bitnet.cpp lookup, and Sandwich phase scheduling. Keep PTQ1
@@ -230,3 +236,72 @@ parity, recurrent backend execution, Linux build and Intel speed/RSS measurement
 remain required. Direct snapshot writes and alternative weight layouts are deferred
 until lifetime and profiling evidence justify them. See the package checklist and
 pinned source references before enabling experiments.
+
+## Additional engine structures — 23 October 2026
+
+The [additional engine review](docs/ADDITIONAL_ENGINE_REVIEW.md) inspects pinned
+MLC-LLM, OpenVINO, ONNX Runtime, XNNPACK, KTransformers and mistral.rs sources.
+The [suffix workspace increment](patches/prism-suffix-workspace/README.md) applies
+bounded request-owned scratch reuse and a synchronous borrowed history view to
+the external Prism suffix drafter. It is opt-in via LLAMA_SPEC_SUFFIX_WORKSPACE=1;
+installed binaries and launch profiles remain unchanged. It composes after the
+runtime-lifecycle delta and must be reversed first. Exact draft-vector parity
+passes 836,772 cases; full modified source and request-lifecycle fixtures pass.
+Warm helper allocation/copy work falls, but Intel/end-to-end gains remain unmeasured.
+
+References: [MLC draft workspace](https://github.com/mlc-ai/mlc-llm/blob/8978ea9aec626d64096aaa92fbc89bda2e3ea802/cpp/serve/draft_token_workspace_manager.cc),
+[OpenVINO memory ownership](https://github.com/openvinotoolkit/openvino/blob/695d69efe543b9e6c75361bc5d3df9c866d9c6ed/src/plugins/intel_cpu/src/memory_control.cpp),
+[ONNX memory planning](https://github.com/microsoft/onnxruntime/blob/84829e76d4fbb4a7258202f777fa4ff0876a3564/onnxruntime/core/framework/execution_frame.cc).
+The independent implementation copies no upstream engine code. Other reviewed
+structures either overlap existing code or need profiling/backend parity first.
+
+
+## Additional paper review — 23 October 2026
+
+[Paper review and decisions](docs/ADDITIONAL_PAPER_REVIEW_2.md): prioritize full-cycle
+selector cost accounting and real-backend recurrent-state oracle tests. These are
+pending research/validation items; no new runtime optimization is implemented here.
+LeanAttention is conditional on an attention bottleneck. TreeWY remains exploratory
+because its reported token streams are not bit-identical; existing ReplaySSM work
+overlaps. Block Verification adds no benefit at temperature zero, and NoMAD's
+approximate attention is excluded from the present correctness scope.
+
+References: [SmartSpec](https://arxiv.org/abs/2406.14066),
+[Decoding Speculative Decoding](https://arxiv.org/abs/2402.01528),
+[GDN Tree-Scan](https://arxiv.org/abs/2609.23900),
+[TreeWY](https://arxiv.org/abs/2608.20961),
+[LeanAttention](https://arxiv.org/abs/2405.10480),
+[Block Verification](https://arxiv.org/abs/2403.10444),
+[NoMAD-Attention](https://arxiv.org/abs/2403.01273).
+
+
+## Further CPU decode paper candidates — 23 October 2026
+
+CPU paper comparison (local development notes; excluded from source distribution) records
+[Vec-LUT](https://arxiv.org/abs/2512.06443) as a deferred small-column competitor
+to existing PTQ1 reuse, and [AI-PC](https://arxiv.org/abs/2508.06753) operand-layout
+ideas as a feasibility lead. Neither is implemented by this documentation update.
+
+
+## AI-PC Intel instruction adaptation — 23 October 2026
+
+Design and acceptance gates (local development notes; excluded from source distribution) map the
+[AI-PC paper](https://arxiv.org/abs/2508.06753) to existing base-3 PTQ1. First
+consider feature-gated VEX VPDPBUSD with exact unsigned-code correction, then
+bounded lane staging only with evidence. The paper's signed-byte VPDPBSSD and
+uniform int2 layout are not assumed available or directly compatible.
+[Intel extension reference](https://cdrdv2-public.intel.com/843860/architecture-instruction-set-extensions-programming-reference-dec-24.pdf)
+and [instruction reference](https://cdrdv2-public.intel.com/835757/325383-sdm-vol-2abcd.pdf)
+are cited in the design. This revision changes documentation only; no SIMD kernel,
+permanent weight layout or measured speedup is implemented.
+
+
+## CPU hot-path increment - 23 October 2026
+
+[Exact suffix search/voting and optional vector scaling](patches/prism-hotpath-increment/README.md)
+are applied to the composed Prism source as a reversible two-header layer.
+Existing installed binaries are unchanged. Suffix scratch mode remains opt-in;
+vector scaling is disabled by default because synthetic results were mixed.
+Model-free parity and timings are recorded in the package. MTP plus suffix are
+currently selected per cycle; suffix-first/MTP-fallback is a documented candidate,
+not an implemented hybrid arm. Intel laptop/model throughput remains untested.

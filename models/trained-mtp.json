@@ -1,0 +1,146 @@
+{
+  "name": "Bonsai Hermes MTP step1800",
+  "status": "prepared locally; not yet published",
+  "artifacts": [
+    {
+      "file": "bonsai-hermes-mtp-step1800-bf16.safetensors",
+      "bytes": 849400392,
+      "sha256": "3bc08d66f2cae9a72129068a47bc7c5cad0cac12e2434be64051f7ec4a5880a1"
+    },
+    {
+      "file": "bonsai-hermes-mtp-step1800-mixed-q6k-q8_0.zip",
+      "bytes": 362335175,
+      "sha256": "a663708ce77702913051560ef061d0e6e5f65cfb1bc4151de1ed18d19040be57"
+    }
+  ],
+  "checkpoint_tensors": {
+    "mtp.fc.weight": {
+      "dtype": "BF16",
+      "shape": [
+        5120,
+        10240
+      ]
+    },
+    "mtp.layers.0.input_layernorm.weight": {
+      "dtype": "BF16",
+      "shape": [
+        5120
+      ]
+    },
+    "mtp.layers.0.mlp.down_proj.weight": {
+      "dtype": "BF16",
+      "shape": [
+        5120,
+        17408
+      ]
+    },
+    "mtp.layers.0.mlp.gate_proj.weight": {
+      "dtype": "BF16",
+      "shape": [
+        17408,
+        5120
+      ]
+    },
+    "mtp.layers.0.mlp.up_proj.weight": {
+      "dtype": "BF16",
+      "shape": [
+        17408,
+        5120
+      ]
+    },
+    "mtp.layers.0.post_attention_layernorm.weight": {
+      "dtype": "BF16",
+      "shape": [
+        5120
+      ]
+    },
+    "mtp.layers.0.self_attn.k_norm.weight": {
+      "dtype": "BF16",
+      "shape": [
+        256
+      ]
+    },
+    "mtp.layers.0.self_attn.k_proj.weight": {
+      "dtype": "BF16",
+      "shape": [
+        1024,
+        5120
+      ]
+    },
+    "mtp.layers.0.self_attn.o_proj.weight": {
+      "dtype": "BF16",
+      "shape": [
+        5120,
+        6144
+      ]
+    },
+    "mtp.layers.0.self_attn.q_norm.weight": {
+      "dtype": "BF16",
+      "shape": [
+        256
+      ]
+    },
+    "mtp.layers.0.self_attn.q_proj.weight": {
+      "dtype": "BF16",
+      "shape": [
+        12288,
+        5120
+      ]
+    },
+    "mtp.layers.0.self_attn.v_proj.weight": {
+      "dtype": "BF16",
+      "shape": [
+        1024,
+        5120
+      ]
+    },
+    "mtp.norm.weight": {
+      "dtype": "BF16",
+      "shape": [
+        5120
+      ]
+    },
+    "mtp.pre_fc_norm_embedding.weight": {
+      "dtype": "BF16",
+      "shape": [
+        5120
+      ]
+    },
+    "mtp.pre_fc_norm_hidden.weight": {
+      "dtype": "BF16",
+      "shape": [
+        5120
+      ]
+    }
+  },
+  "base_sha256": "1e33c571a5ce7a9a3e42474d66192923d5a6d77da7fb3a22986dc809522b5685",
+  "reconstructed_model_sha256": "38afb3be6bc6b4d08a83588974290662dd747db3902f01b5b72ca493787006a2",
+  "reconstruction_verified": true,
+  "training": {
+    "selected_global_step": 1800,
+    "continued_from_step": 720,
+    "new_updates": 1080,
+    "epochs_this_round": 3,
+    "new_tasks_this_round": 100,
+    "replay_tasks_this_round": 20,
+    "validation_interval_updates": 50,
+    "early_stop_patience": 3,
+    "validation_kl": 0.1413530630990863,
+    "validation_top1": 0.9109375,
+    "optimizer_reset_this_round": true
+  },
+  "quantization": "Matrices mixed Q6_K/Q8_0; normalization tensors F32; no duplicated embedding/output weights",
+  "limitations": [
+    "No demonstrated stable speed advantage over step720",
+    "Window4 failed greedy full-token parity; do not enable by default",
+    "CPU/Intel iGPU performance and parity unmeasured",
+    "Existing launcher pins original model hash and rejects the reconstructed trained model; separate integration review required"
+  ],
+  "upstream_revisions_observed_at_packaging": {
+    "sudoingx/Ternary-Bonsai-2-27B-PTQ1_0-MTP-GGUF": "fc13bb8af037f46e07425e73ff5a9ac3d75b8924",
+    "prism-ml/Ternary-Bonsai-2-27B-gguf": "b072e1d3b35a0a630cece372c2127528e0994386",
+    "Qwen/Qwen3.8-27B": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"
+  },
+  "provenance_note": "Revisions record current source documentation, not a claim of the original download revision; local artifact identity is pinned by SHA256.",
+  "distribution": "Quantized ZIP tracked by Git LFS; BF16 checkpoint remains local; not pushed yet"
+}

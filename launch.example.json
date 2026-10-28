@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "python_executable": "",
+  "prism_executable": "",
+  "prism_sha256": "",
+  "model_path": "",
+  "hermes_profile": "",
+  "engine_profile": "bonsai27-linux-cpu.json",
+  "automatic_memory_workflow": false,
+  "execution_enabled": false,
+  "target_hardware_reviewed": false,
+  "runtime_reviewed": false,
+  "startup_timeout_seconds": 600
+}

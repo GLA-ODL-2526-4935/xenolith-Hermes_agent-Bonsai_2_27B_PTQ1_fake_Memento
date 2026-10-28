@@ -1,6 +1,6 @@
 # Gemma 4 E4B port status
 
-> Historical native-port scope. The active project candidate is now Bonsai 2 27B via the additional Prism backend; see [v5 plan](Local_Bonsai27_Hermes_Xenolith_Memory_Plan_v5.md) and [backend status](BONSAI_BACKEND_STATUS.md). Statements below about pending training reflect 20 October and are not the current deployment prerequisite. Native E4B validation remains unfinished.
+> Historical native-port scope. The active project candidate is now Bonsai 2 27B via the additional Prism backend; see v5 plan (local development notes; excluded from source distribution) and [backend status](BONSAI_BACKEND_STATUS.md). Statements below about pending training reflect 20 October and are not the current deployment prerequisite. Native E4B validation remains unfinished.
 
 Updated: 20 October 2026. Engine changes apply only to this combined fork.
 Baseline upstream commit: `88e8661d190985c50c638049dd2fec195a0fec63`.

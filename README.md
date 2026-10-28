@@ -13,6 +13,11 @@ projects and a user-supplied engine may support other hardware.
 
 ## What differs from ordinary Hermes?
 
+Prepared combined startup: [START_HERE.md](START_HERE.md). Model/runtime paths are
+blank in `launch.example.json`; nothing starts until target setup and explicit
+execution gates are completed. Markdown memory review, individual-draft approval
+and audit archiving: [review guide](Hermes_agent/local_extensions/e4b_memory/REVIEW_WORKFLOW.md).
+
 This includes the upstream [Hermes Agent](https://github.com/NousResearch/hermes-agent)
 inside `Hermes_agent/`, plus experimental local extensions:
 
@@ -133,8 +138,8 @@ it passwords, memory files or API secrets.
 
 ## Status, credits and licensing
 
-Use the [functional checklist](Hermes_agent/PROJECT_FUNCTION_CHECKLIST.md) and
-[active v5 plan](Hermes_agent/Local_Bonsai27_Hermes_Xenolith_Memory_Plan_v5.md)
+Use the functional checklist (local development notes; excluded from source distribution) and
+active v5 plan (local development notes; excluded from source distribution)
 for current memory/security/browser status; engine-specific notes are in
 [`engine/README.md`](engine/README.md). Offline tests are not Intel/Linux runtime
 certification. No production-readiness or speed guarantee is made.
@@ -153,8 +158,8 @@ Runtime, dependencies and optional model licenses remain separate. See
 
 ## Intel decode research plan — 22 October 2026
 
-See the [engine structure roadmap](engine/docs/ENGINE_DECODE_STRUCTURE_ROADMAP.md),
-[engine checklist section 4A](PROJECT_FUNCTION_CHECKLIST.md#4a-bonsai-prism-paper-derived-decode-structures)
+See the engine structure roadmap (local development notes; excluded from source distribution),
+engine checklist section 4A (local development notes; excluded from source distribution)
 and [twelve paper references with attribution](engine/README.md#decode-research-roadmap-and-paper-references).
 Priority is BITCOS feasibility, bitnet.cpp exact lookup and Sandwich phase scheduling;
 these are design gates, not measured speed gains or newly activated runtime code.
@@ -209,3 +214,9 @@ cost learning across eligible MTP requests without an enabling env switch.
 The benchmark supplies explicit disk profile paths for restart persistence.
 Runtime identities now include adjacent shared libraries. No Intel speed claim
 is implied by a Windows/NVIDIA benchmark.
+
+## Source and model distribution
+
+See [distribution inventory and remaining setup requirements](DISTRIBUTION.md) and
+[trained MTP head model card](models/MODEL_CARD.md). Weights and local research
+records are distributed separately from the source tree.

@@ -1,0 +1,5 @@
+# Model weights are distributed separately from source code.
+*.gguf
+
+# Separate release assets, not source commits.
+/artifacts/

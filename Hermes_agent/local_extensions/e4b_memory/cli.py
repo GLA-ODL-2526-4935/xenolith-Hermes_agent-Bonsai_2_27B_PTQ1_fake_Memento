@@ -41,11 +41,26 @@ def register_cli(subparser):
     delete.add_argument("id")
     commands.add_parser("consolidate", help="Promote records if idle for three hours")
     commands.add_parser("requests", help="Inspect unverified checkpoint candidates")
-    commands.add_parser("review-memory", help="Inspect automatic drafts/conflict proposals, sources and errors")
+    review = commands.add_parser("review-memory", help="Readable Markdown review with exact sources and proposed changes")
+    review.add_argument("--id")
+    review.add_argument("--status", default="all")
+    review.add_argument("--format", choices=("markdown", "json"), default="markdown")
+    history = commands.add_parser("memory-history", help="List pending/closed/stale proposal history without source text")
+    history.add_argument("--status", default="all")
+    preview = commands.add_parser("archive-memory-preview", help="Preview selected closed/stale audits; no removal")
+    preview.add_argument("ids", nargs="+")
+    archive = commands.add_parser("archive-memory", help="Back up audits before removing selected closed/stale proposals")
+    archive.add_argument("plan_file")
+    commands.add_parser("memory-archives", help="List private owner proposal-audit backups")
+    archived = commands.add_parser("review-archive", help="Read archived audits; never restores approval capability")
+    archived.add_argument("filename")
+    archived.add_argument("--format", choices=("markdown", "json"), default="markdown")
     commands.add_parser("retry-memory-review", help="Owner permits another attempt after failed background review")
     for name in ("accept-memory", "reject-memory"):
         child = commands.add_parser(name, help="Owner decision on the exact inspected memory proposal")
         child.add_argument("id")
+        if name == "accept-memory":
+            child.add_argument("--drafts", nargs="+", type=int, help="Accept these one-based drafts; reject the rest")
     commands.add_parser("tasks", help="Inspect separate unfinished-task recovery state")
     step = commands.add_parser("save-step", help="Controller saves visible source-linked recovery, never approved memory")
     step.add_argument("session")
@@ -76,7 +91,7 @@ def run(args):
         return
     store = Store(get_hermes_home() / "e4b_memory")
     result = COMMANDS[args.memory_command](store, args)
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(result if isinstance(result, str) else json.dumps(result, ensure_ascii=False, indent=2))
 
 
 def _checkpoint(store, args):
@@ -171,12 +186,17 @@ COMMANDS.update(_offline_commands())
 
 def _review_commands():
     from .review import decide, retry_failed
+    from .review_archive import archive, preview_archive, list_archives, review_archived
+    from .review_display import history, review_output
+    from .owner import read_input
     return {
-        "review-memory": lambda store, args: {
-            "proposals": store.snapshot().get("memory_proposals", {}),
-            "error": store.snapshot().get("memory_review_error"),
-            "notice": "Unverified proposals. Acceptance reviews the proposed text AND supporting evidence."},
-        "accept-memory": lambda store, args: decide(store, args.id, True),
+        "review-memory": review_output,
+        "memory-history": lambda store, args: history(store, args.status),
+        "archive-memory-preview": lambda store, args: preview_archive(store, args.ids),
+        "archive-memory": lambda store, args: archive(store, read_input(args.plan_file)),
+        "memory-archives": lambda store, args: list_archives(store),
+        "review-archive": lambda store, args: review_archived(store, args.filename, format=args.format),
+        "accept-memory": lambda store, args: decide(store, args.id, True, selected_drafts=getattr(args, "drafts", None)),
         "reject-memory": lambda store, args: decide(store, args.id, False),
         "retry-memory-review": lambda store, args: retry_failed(store),
     }

@@ -1,5 +1,10 @@
 # Draft selection and CPU kernel review — 22 October 2026
 
+Current decision policy: conditional combination plan (local development notes; excluded from source distribution),
+25 October 2026. It supersedes blanket either/or selections below; retain this
+review as historical mechanisms/source-status evidence. Existing target-testing
+deferrals and correctness exclusions remain in force. No new runtime work.
+
 Original research/design review; updated source status below. During the review,
 no inference code, live profile, model/head, runtime binary,
 GPU or WSL changed or run. Applies to the external Bonsai Prism backend and its

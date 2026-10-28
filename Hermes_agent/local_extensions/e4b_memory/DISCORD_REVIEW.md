@@ -39,10 +39,16 @@ owner acceptance over the model/controller HTTP API or public network listener.
 ## DM commands
 
 1. `!memory pending` lists up to 20 pending IDs, without private source excerpts.
-2. `!memory show ID` sends the **complete JSON proposal and evidence** as an
+2. `!memory show ID` sends a **readable Markdown proposal and evidence report** as an
    attachment plus exact accept/reject commands containing a random code.
 3. Read the full attachment, then copy the chosen command:
    `!memory accept ID CODE` or `!memory reject ID CODE`.
+
+For generation proposals, append selected one-based draft numbers, e.g.
+`!memory accept ID CODE 1,3`. This accepts those drafts and explicitly rejects
+the rest, closing the proposal. Full audit data remains in the Markdown report;
+JSON remains authoritative storage. See [REVIEW_WORKFLOW.md](REVIEW_WORKFLOW.md)
+for owner history, archive management and the manual-acceptance workflow switch.
 
 Only the latest successfully delivered preview is actionable. Its code expires
 in five minutes, is single-use, and is lost on restart. There is no accept-all or
@@ -70,7 +76,7 @@ approvals for browser/download/system access, which are not implemented here.
   tool output or webpage cannot approve. Compromise of your Discord account or
   the owner bot process remains a serious risk; account MFA and OS isolation
   are still needed. Same-account filesystem access is not isolated by Python.
-- Mentions and embeds are disabled; proposal content is an inert JSON attachment,
+- Mentions and embeds are disabled; proposal content is a Markdown attachment with quoted source/audit data,
   not executable content or commands. Unverified text can still mislead a human.
 - Only one bot per bank; no multi-user mapping, auto-start, automatic
   notifications, acceptance buttons or automatic acceptance is added. Close the
